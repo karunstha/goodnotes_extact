@@ -17,6 +17,8 @@ services:
 
   goodnotes-mcp:
     build: .
+    image: goodnotes-mcp
+    container_name: goodnotes-mcp
     env_file:
       - .env
     ports:
