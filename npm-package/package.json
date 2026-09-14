@@ -1,0 +1,16 @@
+{
+  "name": "@your-scope/goodnotes-vlm-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for extracting GoodNotes shared notebook pages and analyzing them with an Ollama vision model.",
+  "license": "MIT",
+  "bin": {
+    "goodnotes-vlm-mcp": "bin/goodnotes-vlm-mcp.js"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,14 @@
+services:
+  goodnotes-vlm:
+    build: .
+    command: ["uvicorn", "goodnotes_ocr.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    environment:
+      OLLAMA_URL: "${DOCKER_OLLAMA_URL:-http://host.docker.internal:11434}"
+    volumes:
+      - ./output:/app/output
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
