@@ -52,7 +52,7 @@ docker compose up --build
 The API will be available at:
 
 ```text
-http://localhost:8000
+http://localhost:${API_PORT}
 ```
 
 ## API
@@ -60,13 +60,13 @@ http://localhost:8000
 Health check:
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:${API_PORT}/health
 ```
 
 Analyze one page:
 
 ```bash
-curl -s http://localhost:8000/extract \
+curl -s http://localhost:${API_PORT}/extract \
   -H 'Content-Type: application/json' \
   -d '{
     "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
@@ -78,7 +78,7 @@ curl -s http://localhost:8000/extract \
 Analyze the last page without knowing the page count:
 
 ```bash
-curl -s http://localhost:8000/extract \
+curl -s http://localhost:${API_PORT}/extract \
   -H 'Content-Type: application/json' \
   -d '{
     "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
@@ -90,7 +90,7 @@ curl -s http://localhost:8000/extract \
 Return only the page image for a single page:
 
 ```bash
-curl -o page-44.png -s http://localhost:8000/extract \
+curl -o page-44.png -s http://localhost:${API_PORT}/extract \
   -H 'Content-Type: application/json' \
   -d '{
     "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
@@ -105,7 +105,7 @@ paths because a single HTTP response cannot directly be multiple PNG files.
 Analyze multiple pages:
 
 ```bash
-curl -s http://localhost:8000/extract \
+curl -s http://localhost:${API_PORT}/extract \
   -H 'Content-Type: application/json' \
   -d '{
     "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
@@ -237,6 +237,7 @@ Configuration lives in `.env`:
 - `OLLAMA_URL`: Ollama base URL, default `http://host.docker.internal:11434`
 - `DOCKER_OLLAMA_URL`: Ollama URL used by Docker Compose, default `http://host.docker.internal:11434`
 - `OLLAMA_MODEL`: vision model, default `llama3.2-vision`
+- `API_PORT`: host port exposed by Docker Compose, default `8000`
 - `OUTPUT_DIR`: extracted image directory, default `output`
 - `BROWSER_TIMEOUT_MS`: page load timeout, default `60000`
 - `BROWSER_SETTLE_MS`: render settle delay, default `2000`
