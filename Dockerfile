@@ -5,6 +5,10 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src \
     OLLAMA_URL=http://host.docker.internal:11434 \
     OLLAMA_MODEL=llama3.2-vision \
+    MCP_TRANSPORT=stdio \
+    MCP_HOST=0.0.0.0 \
+    MCP_PORT=5455 \
+    MCP_PATH=/mcp \
     OUTPUT_DIR=/app/output
 
 WORKDIR /app
@@ -21,6 +25,6 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 COPY . .
 
-EXPOSE 8000
+EXPOSE 8000 5455
 
 CMD ["python", "-m", "goodnotes_ocr.mcp_server"]

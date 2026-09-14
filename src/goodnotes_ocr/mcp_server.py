@@ -24,7 +24,17 @@ except ImportError as exc:  # pragma: no cover - import guard for optional runti
 
 load_env_file()
 
-mcp = FastMCP("goodnotes-vlm")
+MCP_TRANSPORT = os.environ.get("MCP_TRANSPORT", "stdio")
+MCP_HOST = os.environ.get("MCP_HOST", "127.0.0.1")
+MCP_PORT = int(os.environ.get("MCP_PORT", "5455"))
+MCP_PATH = os.environ.get("MCP_PATH", "/mcp")
+
+mcp = FastMCP(
+    "goodnotes-vlm",
+    host=MCP_HOST,
+    port=MCP_PORT,
+    streamable_http_path=MCP_PATH,
+)
 
 
 @mcp.tool()
@@ -141,4 +151,4 @@ def extract_goodnotes_image_metadata(
 
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport=MCP_TRANSPORT)
