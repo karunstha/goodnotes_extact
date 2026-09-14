@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 from pathlib import Path
 from typing import Any
@@ -38,7 +37,7 @@ mcp = FastMCP(
 
 
 @mcp.tool()
-def extract_goodnotes(
+async def extract_goodnotes(
     url: str,
     pages: int | list[int | str] | str,
     prompt: str | None = None,
@@ -48,15 +47,13 @@ def extract_goodnotes(
 ) -> Any:
     """Extract GoodNotes page(s), optionally returning MCP image content."""
     try:
-        return asyncio.run(
-            _extract_goodnotes_async(
-                url=url,
-                pages=pages,
-                prompt=prompt,
-                just_image=just_image,
-                model=model,
-                ollama_url=ollama_url,
-            )
+        return await _extract_goodnotes_async(
+            url=url,
+            pages=pages,
+            prompt=prompt,
+            just_image=just_image,
+            model=model,
+            ollama_url=ollama_url,
         )
     except (GoodnotesOcrError, ValueError) as exc:
         return {"error": str(exc)}
@@ -114,36 +111,34 @@ async def _extract_goodnotes_async(
 
 
 @mcp.tool()
-def extract_goodnotes_image(
+async def extract_goodnotes_image(
     url: str,
     pages: int | list[int | str] | str,
 ) -> Any:
     """Extract GoodNotes page image(s) and return MCP Image content."""
-    return extract_goodnotes(url=url, pages=pages, just_image=True)
+    return await extract_goodnotes(url=url, pages=pages, just_image=True)
 
 
 @mcp.tool()
-def extract_goodnotes_image_metadata(
+async def extract_goodnotes_image_metadata(
     url: str,
     pages: int | list[int | str] | str,
 ) -> list[dict[str, Any]] | dict[str, str]:
     """Extract page image(s) and return paths/metadata instead of image content."""
     try:
-        batch = asyncio.run(
-            extract_page_images(
-                url,
-                parse_pages(pages),
-                output_dir=Path(os.environ.get("OUTPUT_DIR", "output")),
-                browser_options=BrowserOptions(
-                    headless=True,
-                    timeout_ms=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")),
-                    settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "2000")),
-                    viewport_width=int(os.environ.get("VIEWPORT_WIDTH", "1500")),
-                    viewport_height=int(os.environ.get("VIEWPORT_HEIGHT", "2200")),
-                    max_probe_page=int(os.environ.get("MAX_PROBE_PAGE", "2000")),
-                ),
-                pdf_dpi=int(os.environ.get("PDF_DPI", "300")),
-            )
+        batch = await extract_page_images(
+            url,
+            parse_pages(pages),
+            output_dir=Path(os.environ.get("OUTPUT_DIR", "output")),
+            browser_options=BrowserOptions(
+                headless=True,
+                timeout_ms=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")),
+                settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "2000")),
+                viewport_width=int(os.environ.get("VIEWPORT_WIDTH", "1500")),
+                viewport_height=int(os.environ.get("VIEWPORT_HEIGHT", "2200")),
+                max_probe_page=int(os.environ.get("MAX_PROBE_PAGE", "2000")),
+            ),
+            pdf_dpi=int(os.environ.get("PDF_DPI", "300")),
         )
         return image_batch_to_dicts(batch)
     except (GoodnotesOcrError, ValueError) as exc:

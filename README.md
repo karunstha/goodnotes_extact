@@ -167,6 +167,44 @@ docker compose run --rm goodnotes-vlm \
 
 ## MCP Server
 
+There are two MCP modes:
+
+- **stdio**: Hermes starts the container/process directly.
+- **HTTP**: you run the container as a server and Hermes connects to a URL like
+  `http://127.0.0.1:5455/mcp`.
+
+For your URL-style Hermes config, run the MCP server with Docker:
+
+```bash
+docker run --rm \
+  -p 5455:5455 \
+  -e MCP_TRANSPORT=streamable-http \
+  -e MCP_HOST=0.0.0.0 \
+  -e MCP_PORT=5455 \
+  -e MCP_PATH=/mcp \
+  goodnotes-vlm
+```
+
+Then use:
+
+```yaml
+mcp_servers:
+  goodnotes-vlm:
+    url: http://127.0.0.1:5455/mcp
+    enabled: true
+    timeout: 120
+    trust: untrusted
+    tools: true
+    resources: false
+    prompts: false
+```
+
+With Compose, the `goodnotes-mcp` service exposes the same endpoint:
+
+```bash
+docker compose up goodnotes-mcp
+```
+
 For distribution, the intended flow is an npm launcher that starts the
 published Docker image. That lets users configure the MCP server like this:
 
@@ -238,6 +276,10 @@ Configuration lives in `.env`:
 - `DOCKER_OLLAMA_URL`: Ollama URL used by Docker Compose, default `http://host.docker.internal:11434`
 - `OLLAMA_MODEL`: vision model, default `llama3.2-vision`
 - `API_PORT`: host port exposed by Docker Compose, default `8000`
+- `MCP_TRANSPORT`: `stdio`, `sse`, or `streamable-http`; default in `.env` is `streamable-http`
+- `MCP_HOST`: MCP HTTP bind host, default `0.0.0.0`
+- `MCP_PORT`: MCP HTTP port, default `5455`
+- `MCP_PATH`: streamable HTTP endpoint path, default `/mcp`
 - `OUTPUT_DIR`: extracted image directory, default `output`
 - `BROWSER_TIMEOUT_MS`: page load timeout, default `60000`
 - `BROWSER_SETTLE_MS`: render settle delay, default `2000`
