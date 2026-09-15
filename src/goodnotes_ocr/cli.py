@@ -56,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--headful", action="store_true", help="Show the browser window.")
     parser.add_argument("--timeout-ms", type=int, default=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")))
-    parser.add_argument("--settle-ms", type=int, default=int(os.environ.get("BROWSER_SETTLE_MS", "2000")))
+    parser.add_argument("--settle-ms", type=int, default=int(os.environ.get("BROWSER_SETTLE_MS", "6000")))
     parser.add_argument("--max-probe-page", type=int, default=int(os.environ.get("MAX_PROBE_PAGE", "2000")))
     parser.add_argument("--viewport-width", type=int, default=int(os.environ.get("VIEWPORT_WIDTH", "1500")))
     parser.add_argument("--viewport-height", type=int, default=int(os.environ.get("VIEWPORT_HEIGHT", "2200")))

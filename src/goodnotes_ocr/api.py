@@ -48,7 +48,7 @@ async def extract(request: ExtractRequest) -> Any:
         browser_options = BrowserOptions(
             headless=True,
             timeout_ms=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")),
-            settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "2000")),
+            settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "6000")),
             viewport_width=int(os.environ.get("VIEWPORT_WIDTH", "1500")),
             viewport_height=int(os.environ.get("VIEWPORT_HEIGHT", "2200")),
             max_probe_page=int(os.environ.get("MAX_PROBE_PAGE", "2000")),

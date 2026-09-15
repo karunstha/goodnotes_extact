@@ -7,7 +7,6 @@ from typing import Any
 from goodnotes_ocr.config import load_env_file
 from goodnotes_ocr.errors import GoodnotesOcrError
 from goodnotes_ocr.extractor import extract_page_images
-from goodnotes_ocr.image_results import image_batch_to_dicts
 from goodnotes_ocr.models import BrowserOptions
 from goodnotes_ocr.pages import parse_pages
 from goodnotes_ocr.pipeline import analyze_pages
@@ -72,7 +71,7 @@ async def _extract_goodnotes_async(
     browser_options = BrowserOptions(
         headless=True,
         timeout_ms=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")),
-        settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "2000")),
+        settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "6000")),
         viewport_width=int(os.environ.get("VIEWPORT_WIDTH", "1500")),
         viewport_height=int(os.environ.get("VIEWPORT_HEIGHT", "2200")),
         max_probe_page=int(os.environ.get("MAX_PROBE_PAGE", "2000")),
@@ -117,32 +116,6 @@ async def extract_goodnotes_image(
 ) -> Any:
     """Extract GoodNotes page image(s) and return MCP Image content."""
     return await extract_goodnotes(url=url, pages=pages, just_image=True)
-
-
-@mcp.tool()
-async def extract_goodnotes_image_metadata(
-    url: str,
-    pages: int | list[int | str] | str,
-) -> list[dict[str, Any]] | dict[str, str]:
-    """Extract page image(s) and return paths/metadata instead of image content."""
-    try:
-        batch = await extract_page_images(
-            url,
-            parse_pages(pages),
-            output_dir=Path(os.environ.get("OUTPUT_DIR", "output")),
-            browser_options=BrowserOptions(
-                headless=True,
-                timeout_ms=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")),
-                settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "2000")),
-                viewport_width=int(os.environ.get("VIEWPORT_WIDTH", "1500")),
-                viewport_height=int(os.environ.get("VIEWPORT_HEIGHT", "2200")),
-                max_probe_page=int(os.environ.get("MAX_PROBE_PAGE", "2000")),
-            ),
-            pdf_dpi=int(os.environ.get("PDF_DPI", "300")),
-        )
-        return image_batch_to_dicts(batch)
-    except (GoodnotesOcrError, ValueError) as exc:
-        return {"error": str(exc)}
 
 
 if __name__ == "__main__":

@@ -245,7 +245,7 @@ OLLAMA_URL=http://host.docker.internal:11434
 OLLAMA_MODEL=llama3.2-vision
 OUTPUT_DIR=/app/output
 BROWSER_TIMEOUT_MS=60000
-BROWSER_SETTLE_MS=2000
+BROWSER_SETTLE_MS=6000
 ```
 
 To keep extracted images on the host, mount an output directory:
@@ -341,7 +341,6 @@ Tools:
 
 - `extract_goodnotes`: VLM extraction, or MCP image content with `just_image: true`
 - `extract_goodnotes_image`: always returns MCP `Image` content
-- `extract_goodnotes_image_metadata`: returns image path metadata as JSON
 
 Example MCP tool arguments for a direct MCP image:
 
@@ -366,7 +365,7 @@ Configuration lives in `.env`:
 - `MCP_PATH`: streamable HTTP endpoint path, default `/mcp`
 - `OUTPUT_DIR`: extracted image directory, default `output`
 - `BROWSER_TIMEOUT_MS`: page load timeout, default `60000`
-- `BROWSER_SETTLE_MS`: render settle delay, default `2000`
+- `BROWSER_SETTLE_MS`: render settle delay, default `6000`
 - `MAX_PROBE_PAGE`: fallback page-count probe limit, default `2000`
 - `PDF_DPI`: direct PDF render DPI if you build a custom image with PDF tooling
 - `VLM_TIMEOUT_SECONDS`: Ollama request timeout, default `120`
