@@ -140,7 +140,7 @@ and `parse_error`.
 The same pipeline can run as a one-off command:
 
 ```bash
-docker compose run --rm goodnotes-vlm \
+docker compose run --rm goodnotes \
   python main.py "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z" \
   --pages 44 \
   --prompt 'Extract the date and todos. Return {"date": string|null, "todos": string[]}.'
@@ -149,7 +149,7 @@ docker compose run --rm goodnotes-vlm \
 Multiple pages:
 
 ```bash
-docker compose run --rm goodnotes-vlm \
+docker compose run --rm goodnotes \
   python main.py "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z" \
   --pages "1,3-5" \
   --prompt 'Return {"page_title": string|null, "notes": string[]}.'
@@ -158,7 +158,7 @@ docker compose run --rm goodnotes-vlm \
 Image only:
 
 ```bash
-docker compose run --rm goodnotes-vlm \
+docker compose run --rm goodnotes \
   python main.py "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z" \
   --pages last \
   --just_image
@@ -192,6 +192,10 @@ mcp_servers:
     resources: false
     prompts: false
 ```
+
+If you use the npm launcher, it forces `MCP_TRANSPORT=stdio` by default and
+forwards shutdown signals to Docker so the container exits when Hermes stops the
+MCP server.
 
 For image-only tools, no Ollama variables are required. Use
 `extract_goodnotes_image` with arguments like:
@@ -248,6 +252,10 @@ BROWSER_TIMEOUT_MS=60000
 BROWSER_SETTLE_MS=6000
 ```
 
+Do not reuse the repository `.env` for on-demand stdio unless it contains
+`MCP_TRANSPORT=stdio`; the project `.env` may be configured for HTTP MCP, which
+is supposed to keep a server container running.
+
 To keep extracted images on the host, mount an output directory:
 
 ```yaml
@@ -282,12 +290,6 @@ mcp_servers:
     tools: true
     resources: false
     prompts: false
-```
-
-With Compose, the `goodnotes-mcp` service exposes the same endpoint:
-
-```bash
-docker compose up goodnotes-mcp
 ```
 
 For distribution, the intended flow is an npm launcher that starts the

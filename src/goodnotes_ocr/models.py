@@ -11,7 +11,7 @@ class BrowserOptions:
     timeout_ms: int = 45_000
     settle_ms: int = 1_000
     viewport_width: int = 1500
-    viewport_height: int = 2200
+    viewport_height: int = 1910
     device_scale_factor: float = 2.0
     max_probe_page: int = 2_000
 
