@@ -44,7 +44,8 @@ def render_page(pdf_path: Path, page: int, output_path: Path, dpi: int = 300) ->
     if shutil.which("pdftoppm") is None:
         raise DependencyError(
             "Poppler's pdftoppm is required to render PDF pages. "
-            "Install it with `brew install poppler`."
+            "Install it with `brew install poppler` locally or add "
+            "`poppler-utils` to the Docker image."
         )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

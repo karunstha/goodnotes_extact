@@ -1,8 +1,7 @@
 # GoodNotes VLM Extractor
 
-Dockerized Python service for extracting pages from GoodNotes shared notebooks
-or PDFs, sending each rendered page image to an Ollama vision model, and
-returning JSON.
+Dockerized Python service for extracting pages from GoodNotes shared notebooks,
+sending each rendered page image to an Ollama vision model, and returning JSON.
 
 Example GoodNotes share URL:
 
@@ -369,7 +368,7 @@ Configuration lives in `.env`:
 - `BROWSER_TIMEOUT_MS`: page load timeout, default `60000`
 - `BROWSER_SETTLE_MS`: render settle delay, default `2000`
 - `MAX_PROBE_PAGE`: fallback page-count probe limit, default `2000`
-- `PDF_DPI`: direct PDF render DPI, default `300`
+- `PDF_DPI`: direct PDF render DPI if you build a custom image with PDF tooling
 - `VLM_TIMEOUT_SECONDS`: Ollama request timeout, default `120`
 
 Per-request API overrides:
@@ -400,7 +399,8 @@ PYTHONPATH=src python main.py "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4
 - Pages are 1-based.
 - `pages` accepts an integer, a list, `last`, or a string like `1,3-5,last`.
 - `just_image` skips the VLM call and extracts page image(s) only.
-- Direct PDF URLs are supported and rendered through Poppler.
+- The default Docker image is optimized for GoodNotes web links. Direct PDF URL
+  rendering requires a custom image with `poppler-utils` and `pypdf` installed.
 - GoodNotes can change its web app internals. The page renderer uses broad DOM
   heuristics rather than relying on one private API.
 - Shared GoodNotes links are public to anyone with the link. Avoid processing
