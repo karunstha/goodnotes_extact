@@ -173,6 +173,92 @@ There are two MCP modes:
 - **HTTP**: you run the container as a server and Hermes connects to a URL like
   `http://127.0.0.1:5455/mcp`.
 
+For on-demand Docker usage, use stdio. Hermes starts the container when it
+starts the MCP server, and `--rm` removes the container when the session closes:
+
+```yaml
+mcp_servers:
+  goodnotes-vlm:
+    command: docker
+    args:
+      - run
+      - --rm
+      - -i
+      - -e
+      - MCP_TRANSPORT=stdio
+      - ghcr.io/karunstha/goodnotes-vlm-mcp:latest
+    enabled: true
+    timeout: 120
+    trust: untrusted
+    resources: false
+    prompts: false
+```
+
+For image-only tools, no Ollama variables are required. Use
+`extract_goodnotes_image` with arguments like:
+
+```json
+{
+  "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
+  "pages": "last"
+}
+```
+
+To pass individual environment variables:
+
+```yaml
+mcp_servers:
+  goodnotes-vlm:
+    command: docker
+    args:
+      - run
+      - --rm
+      - -i
+      - -e
+      - MCP_TRANSPORT=stdio
+      - -e
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - -e
+      - OLLAMA_MODEL=llama3.2-vision
+      - ghcr.io/karunstha/goodnotes-vlm-mcp:latest
+```
+
+To use an env file instead:
+
+```yaml
+mcp_servers:
+  goodnotes-vlm:
+    command: docker
+    args:
+      - run
+      - --rm
+      - -i
+      - --env-file
+      - /absolute/path/to/goodnotes.env
+      - ghcr.io/karunstha/goodnotes-vlm-mcp:latest
+```
+
+Example `goodnotes.env`:
+
+```env
+MCP_TRANSPORT=stdio
+OLLAMA_URL=http://host.docker.internal:11434
+OLLAMA_MODEL=llama3.2-vision
+OUTPUT_DIR=/app/output
+BROWSER_TIMEOUT_MS=60000
+BROWSER_SETTLE_MS=2000
+```
+
+To keep extracted images on the host, mount an output directory:
+
+```yaml
+      - -v
+      - /absolute/path/to/output:/app/output
+```
+
+Use absolute paths in Hermes configs because Docker is launched by Hermes, not
+from this project directory.
+
 For your URL-style Hermes config, run the MCP server with Docker:
 
 ```bash
@@ -214,21 +300,20 @@ mcp_servers:
     command: npx
     args:
       - -y
-      - '@your-scope/goodnotes-vlm-mcp@latest'
+      - '@karunstha/goodnotes-vlm-mcp@latest'
     env:
       DOCKER_OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: llama3.2-vision
 ```
 
-Before publishing, replace these placeholders:
-
-- `@your-scope/goodnotes-vlm-mcp` in [npm-package/package.json](npm-package/package.json)
-- `@your-scope/goodnotes-vlm-mcp@latest` in docs
-- `ghcr.io/your-github-user/goodnotes-vlm-mcp:latest` in [npm-package/bin/goodnotes-vlm-mcp.js](npm-package/bin/goodnotes-vlm-mcp.js)
-
 The publish workflow in [.github/workflows/publish.yml](.github/workflows/publish.yml)
 builds/pushes the Docker image to GHCR and publishes the npm launcher when you
-push a version tag such as `v0.1.0`. It needs an `NPM_TOKEN` repository secret.
+push a version tag such as `v0.1.0`.
+
+By default, the workflow always publishes the Docker image. The npm launcher is
+opt-in: run the workflow manually with `publish_npm=true`, or set a repository
+variable named `PUBLISH_NPM` to `true`. Npm publishing needs an `NPM_TOKEN`
+repository secret with permission to publish `@karunstha/goodnotes-vlm-mcp`.
 
 Run the MCP server locally:
 

@@ -13,7 +13,7 @@ mcp_servers:
     command: npx
     args:
       - -y
-      - '@your-scope/goodnotes-vlm-mcp@latest'
+      - '@karunstha/goodnotes-vlm-mcp@latest'
 ```
 
 Optional environment:
@@ -24,7 +24,7 @@ mcp_servers:
     command: npx
     args:
       - -y
-      - '@your-scope/goodnotes-vlm-mcp@latest'
+      - '@karunstha/goodnotes-vlm-mcp@latest'
     env:
       DOCKER_OLLAMA_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: llama3.2-vision
@@ -34,5 +34,5 @@ Override the Docker image:
 
 ```yaml
 env:
-  GOODNOTES_VLM_IMAGE: ghcr.io/your-github-user/goodnotes-vlm-mcp:latest
+  GOODNOTES_VLM_IMAGE: ghcr.io/karunstha/goodnotes-vlm-mcp:latest
 ```

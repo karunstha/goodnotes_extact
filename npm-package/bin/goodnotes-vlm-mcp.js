@@ -4,7 +4,7 @@ const { spawn } = require("node:child_process");
 
 const image =
   process.env.GOODNOTES_VLM_IMAGE ||
-  "ghcr.io/your-github-user/goodnotes-vlm-mcp:latest";
+  "ghcr.io/karunstha/goodnotes-vlm-mcp:latest";
 
 const envKeys = [
   "OLLAMA_MODEL",
