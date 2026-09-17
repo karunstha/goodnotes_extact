@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 from goodnotes_ocr.browser import GoodnotesBrowser
 from goodnotes_ocr.errors import GoodnotesOcrError, PageOutOfRangeError
@@ -21,12 +22,13 @@ async def extract_page_images(
     if not pages:
         raise GoodnotesOcrError("At least one page is required.")
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    request_dir = _request_output_dir(output_dir, source_url, pages)
+    request_dir.mkdir(parents=True, exist_ok=True)
     if is_probably_pdf_url(source_url):
         return _extract_pdf_pages(
             source_url,
             pages,
-            output_dir=output_dir,
+            output_dir=request_dir,
             pdf_dpi=pdf_dpi,
         )
 
@@ -45,7 +47,7 @@ async def extract_page_images(
             image_path = await browser.screenshot_page(
                 without_fragment(source_url),
                 page,
-                output_dir / f"page-{page}.png",
+                request_dir / f"page-{page}.png",
             )
             images.append(PageImage(page=page, image_path=image_path))
 
@@ -55,6 +57,18 @@ async def extract_page_images(
         images=tuple(images),
         used_pdf=False,
     )
+
+
+def _request_output_dir(
+    output_dir: Path,
+    source_url: str,
+    pages: list[PageSelector],
+) -> Path:
+    page_label = "-".join(str(page) for page in pages[:6])
+    if len(pages) > 6:
+        page_label = f"{page_label}-plus"
+    stem = safe_output_stem(source_url)
+    return output_dir / "requests" / f"{stem}-pages-{page_label}-{uuid4().hex[:12]}"
 
 
 def _extract_pdf_pages(

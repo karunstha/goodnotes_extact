@@ -180,7 +180,7 @@ Response shape:
     "source_url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
     "page": 44,
     "page_count": 45,
-    "image_path": "output/page-44.png",
+    "image_path": "output/requests/oXNpvq0N3CcdtJ9KPXkD4Z-pages-44-a1b2c3d4e5f6/page-44.png",
     "model": "llama3.2-vision",
     "result": {
       "text_content": "August 2 2026\nA Starbucks ?\n..."
@@ -194,6 +194,9 @@ through `/api/chat` with `think: false`, `stream: false`, and the caller's
 `response_schema` as the chat `format`. VLM extraction requires both `prompt`
 and `response_schema`. If the model does not return valid JSON, the service
 still returns JSON with `raw_response` and `parse_error`.
+
+Each request writes page images into a unique `output/requests/...` directory,
+so overlapping requests do not overwrite each other's screenshots.
 
 ## CLI In Docker
 
@@ -393,7 +396,7 @@ Configuration lives in `.env`:
 - `MCP_HOST`: MCP HTTP bind host, default `0.0.0.0`
 - `MCP_PORT`: MCP HTTP port, default `5455`
 - `MCP_PATH`: streamable HTTP endpoint path, default `/mcp`
-- `OUTPUT_DIR`: extracted image directory, default `output`
+- `OUTPUT_DIR`: extracted image directory, default `output`; each request writes to a unique subdirectory under `requests`
 - `BROWSER_TIMEOUT_MS`: page load timeout, default `60000`
 - `BROWSER_SETTLE_MS`: render settle delay, default `6000`
 - `MAX_PROBE_PAGE`: fallback page-count probe limit, default `2000`
