@@ -29,7 +29,7 @@ If Ollama is running on the host machine, the Docker defaults use:
 http://host.docker.internal:11434
 ```
 
-## Run
+## Local Docker Setup
 
 Configuration is read from `.env`. A working default is included:
 
@@ -37,6 +37,10 @@ Configuration is read from `.env`. A working default is included:
 OLLAMA_URL=http://localhost:11434
 DOCKER_OLLAMA_URL=http://host.docker.internal:11434
 OLLAMA_MODEL=llama3.2-vision
+MCP_TRANSPORT=streamable-http
+MCP_HOST=0.0.0.0
+MCP_PORT=5455
+MCP_PATH=/mcp
 OUTPUT_DIR=output
 ```
 
@@ -44,8 +48,42 @@ For Docker, Compose reads `.env` and maps `OLLAMA_URL` inside the container to
 `DOCKER_OLLAMA_URL`, because `localhost` inside a container is not your host
 machine.
 
+Start the streamable HTTP MCP server:
+
 ```bash
-docker compose up --build
+docker compose up --build goodnotes-mcp
+```
+
+Or run it in the background:
+
+```bash
+docker compose up -d --build goodnotes-mcp
+```
+
+Then point Hermes at:
+
+```yaml
+mcp_servers:
+  goodnotes-vlm:
+    url: http://127.0.0.1:5455/mcp
+    enabled: true
+    timeout: 120
+    trust: untrusted
+    tools: true
+    resources: false
+    prompts: false
+```
+
+Stop the MCP server:
+
+```bash
+docker compose down
+```
+
+To run the optional HTTP API service instead:
+
+```bash
+docker compose up --build goodnotes
 ```
 
 The API will be available at:
@@ -190,22 +228,14 @@ docker compose run --rm goodnotes \
 
 ## MCP Server
 
-The MCP server uses streamable HTTP by default. Start the server container:
+The MCP server uses streamable HTTP by default. For the local `.env` setup, use
+Compose:
 
 ```bash
-docker run --rm \
-  --name goodnotes-vlm-mcp \
-  -p 5455:5455 \
-  -e MCP_TRANSPORT=streamable-http \
-  -e MCP_HOST=0.0.0.0 \
-  -e MCP_PORT=5455 \
-  -e MCP_PATH=/mcp \
-  -e OLLAMA_URL=http://host.docker.internal:11434 \
-  -e OLLAMA_MODEL=llama3.2-vision \
-  ghcr.io/karunstha/goodnotes-vlm-mcp:latest
+docker compose up --build goodnotes-mcp
 ```
 
-Then point Hermes at the streamable HTTP endpoint:
+Hermes config:
 
 ```yaml
 mcp_servers:
@@ -219,15 +249,23 @@ mcp_servers:
     prompts: false
 ```
 
-With Compose:
+The streamable HTTP container is expected to stay running while Hermes uses it.
+Stop it with `Ctrl-C` or `docker compose down`.
+
+If you prefer a one-off Docker command without this repo:
 
 ```bash
-docker compose up --build goodnotes-mcp
+docker run --rm \
+  --name goodnotes-vlm-mcp \
+  -p 5455:5455 \
+  -e MCP_TRANSPORT=streamable-http \
+  -e MCP_HOST=0.0.0.0 \
+  -e MCP_PORT=5455 \
+  -e MCP_PATH=/mcp \
+  -e OLLAMA_URL=http://host.docker.internal:11434 \
+  -e OLLAMA_MODEL=llama3.2-vision \
+  ghcr.io/karunstha/goodnotes-vlm-mcp:latest
 ```
-
-The streamable HTTP container is expected to stay running while Hermes uses it.
-Stop it with `Ctrl-C`, `docker stop goodnotes-vlm-mcp`, or
-`docker compose down`.
 
 For image-only tools, no Ollama variables are required. Use
 `extract_goodnotes_image` with arguments like:
