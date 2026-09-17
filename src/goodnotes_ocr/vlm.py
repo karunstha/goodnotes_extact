@@ -44,9 +44,7 @@ class OllamaVisionClient:
             "format": "json",
         }
         response = self._post_json("/api/generate", payload)
-        raw_text = response.get("response")
-        if not isinstance(raw_text, str):
-            raise VlmError("Ollama response did not include a string `response` field.")
+        raw_text = _response_text(response)
         return _parse_json_response(raw_text)
 
     def _post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -71,6 +69,18 @@ class OllamaVisionClient:
 
 def _image_to_base64(image_path: Path) -> str:
     return base64.b64encode(image_path.read_bytes()).decode("ascii")
+
+
+def _response_text(response: dict[str, Any]) -> str:
+    for key in ("response", "thinking"):
+        value = response.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    if isinstance(response.get("response"), str):
+        return response["response"]
+    raise VlmError(
+        "Ollama response did not include a string `response` or `thinking` field."
+    )
 
 
 def _parse_json_response(raw_text: str) -> Any:

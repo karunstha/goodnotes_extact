@@ -252,9 +252,8 @@ BROWSER_TIMEOUT_MS=60000
 BROWSER_SETTLE_MS=6000
 ```
 
-Do not reuse the repository `.env` for on-demand stdio unless it contains
-`MCP_TRANSPORT=stdio`; the project `.env` may be configured for HTTP MCP, which
-is supposed to keep a server container running.
+For on-demand stdio, make sure the env file contains `MCP_TRANSPORT=stdio`.
+The repository `.env.example` uses that value by default.
 
 To keep extracted images on the host, mount an output directory:
 
@@ -361,7 +360,7 @@ Configuration lives in `.env`:
 - `DOCKER_OLLAMA_URL`: Ollama URL used by Docker Compose, default `http://host.docker.internal:11434`
 - `OLLAMA_MODEL`: vision model, default `llama3.2-vision`
 - `API_PORT`: host port exposed by Docker Compose, default `8000`
-- `MCP_TRANSPORT`: `stdio`, `sse`, or `streamable-http`; default in `.env` is `streamable-http`
+- `MCP_TRANSPORT`: `stdio`, `sse`, or `streamable-http`; default in `.env` is `stdio`
 - `MCP_HOST`: MCP HTTP bind host, default `0.0.0.0`
 - `MCP_PORT`: MCP HTTP port, default `5455`
 - `MCP_PATH`: streamable HTTP endpoint path, default `/mcp`

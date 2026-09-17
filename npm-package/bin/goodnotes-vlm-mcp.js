@@ -47,7 +47,15 @@ for (const key of envKeys) {
 dockerArgs.push(image);
 
 const child = spawn("docker", dockerArgs, {
-  stdio: "inherit",
+  stdio: ["pipe", "inherit", "inherit"],
+});
+
+process.stdin.pipe(child.stdin);
+
+child.stdin.on("error", (error) => {
+  if (error.code !== "EPIPE") {
+    console.error(`Docker stdin error: ${error.message}`);
+  }
 });
 
 let shuttingDown = false;
@@ -84,3 +92,12 @@ child.on("exit", (code, signal) => {
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => forwardSignal(signal));
 }
+
+process.stdin.on("end", () => {
+  if (!child.stdin.destroyed) {
+    child.stdin.end();
+  }
+  forwardSignal("SIGTERM");
+});
+
+process.stdin.on("close", () => forwardSignal("SIGTERM"));
