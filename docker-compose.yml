@@ -14,3 +14,20 @@ services:
       - ./output:/app/output
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  goodnotes-mcp:
+    image: goodnotes-vlm-mcp
+    container_name: goodnotes-vlm-mcp
+    build: .
+    env_file:
+      - .env
+    ports:
+      - "${MCP_PORT:-5455}:${MCP_PORT:-5455}"
+    environment:
+      OLLAMA_URL: "${DOCKER_OLLAMA_URL:-http://host.docker.internal:11434}"
+      MCP_TRANSPORT: streamable-http
+      MCP_HOST: 0.0.0.0
+    volumes:
+      - ./output:/app/output
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

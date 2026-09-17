@@ -70,7 +70,14 @@ curl -s http://localhost:${API_PORT}/extract \
   -d '{
     "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
     "pages": 44,
-    "prompt": "Extract the date and every todo item. Return {\"date\": string|null, \"todos\": string[]}."
+    "prompt": "Read the contents of this page into text_content.",
+    "response_schema": {
+      "type": "object",
+      "properties": {
+        "text_content": {"type": "string"}
+      },
+      "required": ["text_content"]
+    }
   }'
 ```
 
@@ -82,7 +89,14 @@ curl -s http://localhost:${API_PORT}/extract \
   -d '{
     "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
     "pages": "last",
-    "prompt": "Extract the date and every todo item. Return {\"date\": string|null, \"todos\": string[]}."
+    "prompt": "Read the contents of this page into text_content.",
+    "response_schema": {
+      "type": "object",
+      "properties": {
+        "text_content": {"type": "string"}
+      },
+      "required": ["text_content"]
+    }
   }'
 ```
 
@@ -109,7 +123,14 @@ curl -s http://localhost:${API_PORT}/extract \
   -d '{
     "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
     "pages": "1,3-5,44",
-    "prompt": "Return {\"summary\": string, \"action_items\": string[]} for this page."
+    "prompt": "Read the contents of this page into text_content.",
+    "response_schema": {
+      "type": "object",
+      "properties": {
+        "text_content": {"type": "string"}
+      },
+      "required": ["text_content"]
+    }
   }'
 ```
 
@@ -124,16 +145,17 @@ Response shape:
     "image_path": "output/page-44.png",
     "model": "llama3.2-vision",
     "result": {
-      "date": "September 12, 2026",
-      "todos": []
+      "text_content": "August 2 2026\nA Starbucks ?\n..."
     }
   }
 ]
 ```
 
-The `result` field is the JSON parsed from the model response. If the model
-does not return valid JSON, the service still returns JSON with `raw_response`
-and `parse_error`.
+The `result` field is the JSON parsed from the model response. Ollama is called
+through `/api/chat` with `think: false`, `stream: false`, and the caller's
+`response_schema` as the chat `format`. VLM extraction requires both `prompt`
+and `response_schema`. If the model does not return valid JSON, the service
+still returns JSON with `raw_response` and `parse_error`.
 
 ## CLI In Docker
 
@@ -143,7 +165,8 @@ The same pipeline can run as a one-off command:
 docker compose run --rm goodnotes \
   python main.py "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z" \
   --pages 44 \
-  --prompt 'Extract the date and todos. Return {"date": string|null, "todos": string[]}.'
+  --prompt 'Read the contents of this page into text_content.' \
+  --response-schema '{"type":"object","properties":{"text_content":{"type":"string"}},"required":["text_content"]}'
 ```
 
 Multiple pages:
@@ -152,7 +175,8 @@ Multiple pages:
 docker compose run --rm goodnotes \
   python main.py "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z" \
   --pages "1,3-5" \
-  --prompt 'Return {"page_title": string|null, "notes": string[]}.'
+  --prompt 'Read the contents of this page into text_content.' \
+  --response-schema '{"type":"object","properties":{"text_content":{"type":"string"}},"required":["text_content"]}'
 ```
 
 Image only:
@@ -166,118 +190,22 @@ docker compose run --rm goodnotes \
 
 ## MCP Server
 
-There are two MCP modes:
-
-- **stdio**: Hermes starts the container/process directly.
-- **HTTP**: you run the container as a server and Hermes connects to a URL like
-  `http://127.0.0.1:5455/mcp`.
-
-For on-demand Docker usage, use stdio. Hermes starts the container when it
-starts the MCP server, and `--rm` removes the container when the session closes:
-
-```yaml
-mcp_servers:
-  goodnotes-vlm:
-    command: docker
-    args:
-      - run
-      - --rm
-      - -i
-      - -e
-      - MCP_TRANSPORT=stdio
-      - ghcr.io/karunstha/goodnotes-vlm-mcp:latest
-    enabled: true
-    timeout: 120
-    trust: untrusted
-    resources: false
-    prompts: false
-```
-
-If you use the npm launcher, it forces `MCP_TRANSPORT=stdio` by default and
-forwards shutdown signals to Docker so the container exits when Hermes stops the
-MCP server.
-
-For image-only tools, no Ollama variables are required. Use
-`extract_goodnotes_image` with arguments like:
-
-```json
-{
-  "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
-  "pages": "last"
-}
-```
-
-To pass individual environment variables:
-
-```yaml
-mcp_servers:
-  goodnotes-vlm:
-    command: docker
-    args:
-      - run
-      - --rm
-      - -i
-      - -e
-      - MCP_TRANSPORT=stdio
-      - -e
-      - OLLAMA_URL=http://host.docker.internal:11434
-      - -e
-      - OLLAMA_MODEL=llama3.2-vision
-      - ghcr.io/karunstha/goodnotes-vlm-mcp:latest
-```
-
-To use an env file instead:
-
-```yaml
-mcp_servers:
-  goodnotes-vlm:
-    command: docker
-    args:
-      - run
-      - --rm
-      - -i
-      - --env-file
-      - /absolute/path/to/goodnotes.env
-      - ghcr.io/karunstha/goodnotes-vlm-mcp:latest
-```
-
-Example `goodnotes.env`:
-
-```env
-MCP_TRANSPORT=stdio
-OLLAMA_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=llama3.2-vision
-OUTPUT_DIR=/app/output
-BROWSER_TIMEOUT_MS=60000
-BROWSER_SETTLE_MS=6000
-```
-
-For on-demand stdio, make sure the env file contains `MCP_TRANSPORT=stdio`.
-The repository `.env.example` uses that value by default.
-
-To keep extracted images on the host, mount an output directory:
-
-```yaml
-      - -v
-      - /absolute/path/to/output:/app/output
-```
-
-Use absolute paths in Hermes configs because Docker is launched by Hermes, not
-from this project directory.
-
-For your URL-style Hermes config, run the MCP server with Docker:
+The MCP server uses streamable HTTP by default. Start the server container:
 
 ```bash
 docker run --rm \
+  --name goodnotes-vlm-mcp \
   -p 5455:5455 \
   -e MCP_TRANSPORT=streamable-http \
   -e MCP_HOST=0.0.0.0 \
   -e MCP_PORT=5455 \
   -e MCP_PATH=/mcp \
-  goodnotes-vlm
+  -e OLLAMA_URL=http://host.docker.internal:11434 \
+  -e OLLAMA_MODEL=llama3.2-vision \
+  ghcr.io/karunstha/goodnotes-vlm-mcp:latest
 ```
 
-Then use:
+Then point Hermes at the streamable HTTP endpoint:
 
 ```yaml
 mcp_servers:
@@ -291,29 +219,77 @@ mcp_servers:
     prompts: false
 ```
 
-For distribution, the intended flow is an npm launcher that starts the
-published Docker image. That lets users configure the MCP server like this:
+With Compose:
 
-```yaml
-mcp_servers:
-  goodnotes-vlm:
-    command: npx
-    args:
-      - -y
-      - '@karunstha/goodnotes-vlm-mcp@latest'
-    env:
-      DOCKER_OLLAMA_URL: http://host.docker.internal:11434
-      OLLAMA_MODEL: llama3.2-vision
+```bash
+docker compose up --build goodnotes-mcp
 ```
 
-The publish workflow in [.github/workflows/publish.yml](.github/workflows/publish.yml)
-builds/pushes the Docker image to GHCR and publishes the npm launcher when you
-push a version tag such as `v0.1.0`.
+The streamable HTTP container is expected to stay running while Hermes uses it.
+Stop it with `Ctrl-C`, `docker stop goodnotes-vlm-mcp`, or
+`docker compose down`.
 
-By default, the workflow always publishes the Docker image. The npm launcher is
-opt-in: run the workflow manually with `publish_npm=true`, or set a repository
-variable named `PUBLISH_NPM` to `true`. Npm publishing needs an `NPM_TOKEN`
-repository secret with permission to publish `@karunstha/goodnotes-vlm-mcp`.
+For image-only tools, no Ollama variables are required. Use
+`extract_goodnotes_image` with arguments like:
+
+```json
+{
+  "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
+  "pages": "last"
+}
+```
+
+To pass individual environment variables:
+
+```bash
+docker run --rm \
+  --name goodnotes-vlm-mcp \
+  -p 5455:5455 \
+  -e MCP_TRANSPORT=streamable-http \
+  -e MCP_HOST=0.0.0.0 \
+  -e MCP_PORT=5455 \
+  -e MCP_PATH=/mcp \
+  -e OLLAMA_URL=http://100.119.229.86:11434 \
+  -e OLLAMA_MODEL=gemma4:12b-64k \
+  ghcr.io/karunstha/goodnotes-vlm-mcp:latest
+```
+
+To use an env file instead:
+
+```bash
+docker run --rm \
+  --name goodnotes-vlm-mcp \
+  -p 5455:5455 \
+  --env-file /absolute/path/to/goodnotes.env \
+  ghcr.io/karunstha/goodnotes-vlm-mcp:latest
+```
+
+Example `goodnotes.env`:
+
+```env
+MCP_TRANSPORT=streamable-http
+MCP_HOST=0.0.0.0
+MCP_PORT=5455
+MCP_PATH=/mcp
+OLLAMA_URL=http://host.docker.internal:11434
+OLLAMA_MODEL=llama3.2-vision
+OUTPUT_DIR=/app/output
+BROWSER_TIMEOUT_MS=60000
+BROWSER_SETTLE_MS=6000
+```
+
+To keep extracted images on the host, mount an output directory:
+
+```bash
+-v /absolute/path/to/output:/app/output
+```
+
+Use absolute paths in Docker commands when the command is run outside this
+project directory.
+
+The publish workflow in [.github/workflows/publish.yml](.github/workflows/publish.yml)
+builds/pushes the Docker image to GHCR when you push a version tag such as
+`v0.1.0`.
 
 Run the MCP server locally:
 
@@ -324,18 +300,16 @@ PYTHONPATH=src python -m goodnotes_ocr.mcp_server
 
 Example MCP client config:
 
-```json
-{
-  "mcpServers": {
-    "goodnotes-vlm": {
-      "command": "python",
-      "args": ["-m", "goodnotes_ocr.mcp_server"],
-      "env": {
-        "PYTHONPATH": "/Users/karskit/Developer/Personal/goodnotes_scrape/src"
-      }
-    }
-  }
-}
+```yaml
+mcp_servers:
+  goodnotes-vlm:
+    url: http://127.0.0.1:5455/mcp
+    enabled: true
+    timeout: 120
+    trust: untrusted
+    tools: true
+    resources: false
+    prompts: false
 ```
 
 Tools:
@@ -352,6 +326,23 @@ Example MCP tool arguments for a direct MCP image:
 }
 ```
 
+Example MCP tool arguments for VLM extraction:
+
+```json
+{
+  "url": "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z",
+  "pages": 3,
+  "prompt": "Read the contents of this page into text_content.",
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "text_content": {"type": "string"}
+    },
+    "required": ["text_content"]
+  }
+}
+```
+
 ## Configuration
 
 Configuration lives in `.env`:
@@ -360,7 +351,7 @@ Configuration lives in `.env`:
 - `DOCKER_OLLAMA_URL`: Ollama URL used by Docker Compose, default `http://host.docker.internal:11434`
 - `OLLAMA_MODEL`: vision model, default `llama3.2-vision`
 - `API_PORT`: host port exposed by Docker Compose, default `8000`
-- `MCP_TRANSPORT`: `stdio`, `sse`, or `streamable-http`; default in `.env` is `stdio`
+- `MCP_TRANSPORT`: `stdio`, `sse`, or `streamable-http`; default in `.env` is `streamable-http`
 - `MCP_HOST`: MCP HTTP bind host, default `0.0.0.0`
 - `MCP_PORT`: MCP HTTP port, default `5455`
 - `MCP_PATH`: streamable HTTP endpoint path, default `/mcp`
@@ -375,6 +366,7 @@ Per-request API overrides:
 
 - `model`
 - `ollama_url`
+- `response_schema`
 
 ## Local Run
 
@@ -391,7 +383,8 @@ CLI:
 workon test
 PYTHONPATH=src python main.py "https://web.goodnotes.com/s/oXNpvq0N3CcdtJ9KPXkD4Z" \
   --pages 44 \
-  --prompt 'Extract the date and todos. Return {"date": string|null, "todos": string[]}.'
+  --prompt 'Read the contents of this page into text_content.' \
+  --response-schema '{"type":"object","properties":{"text_content":{"type":"string"}},"required":["text_content"]}'
 ```
 
 ## Notes

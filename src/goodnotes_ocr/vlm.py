@@ -16,7 +16,8 @@ DEFAULT_MODEL = "llama3.2-vision"
 PROMPT_TEMPLATE = """You are analyzing one rendered GoodNotes notebook page image.
 
 Return only valid JSON. Do not include Markdown, comments, or prose outside the
-JSON. If the requested value is not visible on the page, use null.
+JSON. If the requested value is not visible on the page, use null. Use the
+provided response schema.
 
 User extraction request:
 {prompt}
@@ -35,15 +36,19 @@ class OllamaVisionClient:
         self.model = model
         self.timeout_seconds = timeout_seconds
 
-    def analyze_image(self, image_path: Path, prompt: str) -> Any:
-        payload = {
-            "model": self.model,
-            "prompt": PROMPT_TEMPLATE.format(prompt=prompt),
-            "images": [_image_to_base64(image_path)],
-            "stream": False,
-            "format": "json",
-        }
-        response = self._post_json("/api/generate", payload)
+    def analyze_image(
+        self,
+        image_path: Path,
+        prompt: str,
+        response_schema: dict[str, Any],
+    ) -> Any:
+        payload = _chat_payload(
+            model=self.model,
+            prompt=prompt,
+            image_b64=_image_to_base64(image_path),
+            response_schema=response_schema,
+        )
+        response = self._post_json("/api/chat", payload)
         raw_text = _response_text(response)
         return _parse_json_response(raw_text)
 
@@ -71,7 +76,38 @@ def _image_to_base64(image_path: Path) -> str:
     return base64.b64encode(image_path.read_bytes()).decode("ascii")
 
 
+def _chat_payload(
+    *,
+    model: str,
+    prompt: str,
+    image_b64: str,
+    response_schema: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": PROMPT_TEMPLATE.format(prompt=prompt),
+                "images": [image_b64],
+            }
+        ],
+        "think": False,
+        "stream": False,
+        "format": response_schema,
+    }
+
+
 def _response_text(response: dict[str, Any]) -> str:
+    message = response.get("message")
+    if isinstance(message, dict):
+        for key in ("content", "thinking"):
+            value = message.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+        if isinstance(message.get("content"), str):
+            return message["content"]
+
     for key in ("response", "thinking"):
         value = response.get(key)
         if isinstance(value, str) and value.strip():
@@ -79,7 +115,7 @@ def _response_text(response: dict[str, Any]) -> str:
     if isinstance(response.get("response"), str):
         return response["response"]
     raise VlmError(
-        "Ollama response did not include a string `response` or `thinking` field."
+        "Ollama response did not include assistant content, `response`, or `thinking`."
     )
 
 

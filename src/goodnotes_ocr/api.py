@@ -31,6 +31,10 @@ class ExtractRequest(BaseModel):
         description="Page number, list, range string like '1,3-5', or 'last'.",
     )
     prompt: str | None = Field(None, description="Prompt describing the JSON extraction task.")
+    response_schema: dict[str, Any] | None = Field(
+        None,
+        description="Ollama JSON schema passed as the chat `format` for VLM extraction.",
+    )
     just_image: bool = Field(False, description="Return extracted page image(s) without a VLM call.")
     model: str | None = Field(None, description="Ollama model name.")
     ollama_url: str | None = Field(None, description="Ollama base URL.")
@@ -74,11 +78,14 @@ async def extract(request: ExtractRequest) -> Any:
 
         if not request.prompt:
             raise ValueError("`prompt` is required unless `just_image` is true.")
+        if request.response_schema is None:
+            raise ValueError("`response_schema` is required when `prompt` is provided.")
 
         results = await analyze_pages(
             source_url=request.url,
             pages=pages,
             prompt=request.prompt,
+            response_schema=request.response_schema,
             output_dir=output_dir,
             browser_options=browser_options,
             vlm_client=vlm_client,

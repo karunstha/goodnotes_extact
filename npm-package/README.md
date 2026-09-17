@@ -1,38 +1,48 @@
 # GoodNotes VLM MCP
 
-Thin npm launcher for the GoodNotes VLM MCP server.
+Thin npm launcher for the GoodNotes VLM MCP server Docker image.
 
-It runs the published Docker image and communicates with the MCP client over
-stdio. Users only need Node/npm, Docker, and an Ollama server.
+It starts the published Docker image as a streamable HTTP MCP server. Users
+only need Node/npm, Docker, and an Ollama server.
 
-## MCP Config
+## Start The Server
+
+```bash
+npx -y @karunstha/goodnotes-vlm-mcp@latest
+```
+
+The default endpoint is:
+
+```text
+http://127.0.0.1:5455/mcp
+```
+
+Use that URL in your MCP client config:
 
 ```yaml
 mcp_servers:
   goodnotes-vlm:
-    command: npx
-    args:
-      - -y
-      - '@karunstha/goodnotes-vlm-mcp@latest'
+    url: http://127.0.0.1:5455/mcp
+    enabled: true
+    timeout: 120
+    trust: untrusted
+    tools: true
+    resources: false
+    prompts: false
 ```
 
 Optional environment:
 
-```yaml
-mcp_servers:
-  goodnotes-vlm:
-    command: npx
-    args:
-      - -y
-      - '@karunstha/goodnotes-vlm-mcp@latest'
-    env:
-      DOCKER_OLLAMA_URL: http://host.docker.internal:11434
-      OLLAMA_MODEL: llama3.2-vision
+```bash
+DOCKER_OLLAMA_URL=http://host.docker.internal:11434 \
+OLLAMA_MODEL=llama3.2-vision \
+MCP_HOST_PORT=5455 \
+npx -y @karunstha/goodnotes-vlm-mcp@latest
 ```
 
 Override the Docker image:
 
-```yaml
-env:
-  GOODNOTES_VLM_IMAGE: ghcr.io/karunstha/goodnotes-vlm-mcp:latest
+```bash
+GOODNOTES_VLM_IMAGE=ghcr.io/karunstha/goodnotes-vlm-mcp:latest \
+npx -y @karunstha/goodnotes-vlm-mcp@latest
 ```

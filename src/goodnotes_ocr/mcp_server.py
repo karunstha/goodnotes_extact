@@ -22,7 +22,7 @@ except ImportError as exc:  # pragma: no cover - import guard for optional runti
 
 load_env_file()
 
-MCP_TRANSPORT = os.environ.get("MCP_TRANSPORT", "stdio")
+MCP_TRANSPORT = os.environ.get("MCP_TRANSPORT", "streamable-http")
 MCP_HOST = os.environ.get("MCP_HOST", "127.0.0.1")
 MCP_PORT = int(os.environ.get("MCP_PORT", "5455"))
 MCP_PATH = os.environ.get("MCP_PATH", "/mcp")
@@ -40,6 +40,7 @@ async def extract_goodnotes(
     url: str,
     pages: int | list[int | str] | str,
     prompt: str | None = None,
+    response_schema: dict[str, Any] | None = None,
     just_image: bool = False,
     model: str | None = None,
     ollama_url: str | None = None,
@@ -50,6 +51,7 @@ async def extract_goodnotes(
             url=url,
             pages=pages,
             prompt=prompt,
+            response_schema=response_schema,
             just_image=just_image,
             model=model,
             ollama_url=ollama_url,
@@ -63,6 +65,7 @@ async def _extract_goodnotes_async(
     url: str,
     pages: int | list[int | str] | str,
     prompt: str | None,
+    response_schema: dict[str, Any] | None,
     just_image: bool,
     model: str | None,
     ollama_url: str | None,
@@ -91,6 +94,10 @@ async def _extract_goodnotes_async(
 
     if not prompt:
         raise ValueError("`prompt` is required unless `just_image` is true.")
+    if response_schema is None:
+        raise ValueError("`response_schema` is required when `prompt` is provided.")
+    if not isinstance(response_schema, dict):
+        raise ValueError("`response_schema` must be a JSON schema object.")
 
     vlm_client = OllamaVisionClient(
         base_url=ollama_url or os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL),
@@ -101,6 +108,7 @@ async def _extract_goodnotes_async(
         source_url=url,
         pages=page_selectors,
         prompt=prompt,
+        response_schema=response_schema,
         output_dir=output_dir,
         browser_options=browser_options,
         vlm_client=vlm_client,

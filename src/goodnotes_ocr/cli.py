@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from goodnotes_ocr.config import load_env_file
 from goodnotes_ocr.errors import GoodnotesOcrError
@@ -31,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--prompt",
         required=False,
         help="Extraction prompt for the vision model. Ask it for the JSON shape you want.",
+    )
+    parser.add_argument(
+        "--response-schema",
+        required=False,
+        help="JSON schema object for Ollama chat format, or @path/to/schema.json.",
     )
     parser.add_argument(
         "--just_image",
@@ -105,6 +111,9 @@ async def run(args: argparse.Namespace) -> list[dict[str, object]]:
 
     if not args.prompt:
         raise ValueError("Pass --prompt unless --just_image is set.")
+    if not args.response_schema:
+        raise ValueError("Pass --response-schema when using --prompt.")
+    response_schema = _load_response_schema(args.response_schema)
 
     vlm_client = OllamaVisionClient(
         base_url=args.ollama_url,
@@ -115,9 +124,25 @@ async def run(args: argparse.Namespace) -> list[dict[str, object]]:
         source_url=args.url,
         pages=pages,
         prompt=args.prompt,
+        response_schema=response_schema,
         output_dir=args.out,
         browser_options=browser_options,
         vlm_client=vlm_client,
         pdf_dpi=args.pdf_dpi,
     )
     return [result.to_dict() for result in results]
+
+
+def _load_response_schema(value: str) -> dict[str, Any]:
+    if value.startswith("@"):
+        raw = Path(value[1:]).read_text(encoding="utf-8")
+    else:
+        raw = value
+
+    try:
+        schema = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"`response_schema` is not valid JSON: {exc}") from exc
+    if not isinstance(schema, dict):
+        raise ValueError("`response_schema` must be a JSON schema object.")
+    return schema

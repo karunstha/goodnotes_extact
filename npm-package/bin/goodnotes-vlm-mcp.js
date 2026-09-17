@@ -22,21 +22,39 @@ const ollamaUrl =
   process.env.DOCKER_OLLAMA_URL ||
   process.env.OLLAMA_URL ||
   "http://host.docker.internal:11434";
-const mcpTransport = process.env.MCP_TRANSPORT || "stdio";
+const mcpTransport = process.env.MCP_TRANSPORT || "streamable-http";
+const mcpHost = process.env.MCP_HOST || "0.0.0.0";
+const mcpPort = process.env.MCP_PORT || "5455";
+const mcpPath = process.env.MCP_PATH || "/mcp";
+const hostPort = process.env.MCP_HOST_PORT || mcpPort;
 
 const dockerArgs = [
   "run",
   "--rm",
-  "-i",
   "--stop-timeout",
   "5",
   "--add-host",
   "host.docker.internal:host-gateway",
+];
+
+if (mcpTransport === "stdio") {
+  dockerArgs.push("-i");
+} else {
+  dockerArgs.push("-p", `${hostPort}:${mcpPort}`);
+}
+
+dockerArgs.push(
   "-e",
   `MCP_TRANSPORT=${mcpTransport}`,
   "-e",
+  `MCP_HOST=${mcpHost}`,
+  "-e",
+  `MCP_PORT=${mcpPort}`,
+  "-e",
+  `MCP_PATH=${mcpPath}`,
+  "-e",
   `OLLAMA_URL=${ollamaUrl}`,
-];
+);
 
 for (const key of envKeys) {
   if (process.env[key]) {
@@ -47,16 +65,18 @@ for (const key of envKeys) {
 dockerArgs.push(image);
 
 const child = spawn("docker", dockerArgs, {
-  stdio: ["pipe", "inherit", "inherit"],
+  stdio: mcpTransport === "stdio" ? ["pipe", "inherit", "inherit"] : "inherit",
 });
 
-process.stdin.pipe(child.stdin);
+if (mcpTransport === "stdio" && child.stdin) {
+  process.stdin.pipe(child.stdin);
 
-child.stdin.on("error", (error) => {
-  if (error.code !== "EPIPE") {
-    console.error(`Docker stdin error: ${error.message}`);
-  }
-});
+  child.stdin.on("error", (error) => {
+    if (error.code !== "EPIPE") {
+      console.error(`Docker stdin error: ${error.message}`);
+    }
+  });
+}
 
 let shuttingDown = false;
 
@@ -93,11 +113,20 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => forwardSignal(signal));
 }
 
-process.stdin.on("end", () => {
-  if (!child.stdin.destroyed) {
-    child.stdin.end();
-  }
-  forwardSignal("SIGTERM");
-});
+if (mcpTransport === "stdio") {
+  process.stdin.on("end", () => {
+    if (child.stdin && !child.stdin.destroyed) {
+      child.stdin.end();
+    }
+    forwardSignal("SIGTERM");
+  });
 
-process.stdin.on("close", () => forwardSignal("SIGTERM"));
+  process.stdin.on("close", () => {
+    forwardSignal("SIGTERM");
+  });
+} else {
+  console.error(`GoodNotes MCP listening at http://127.0.0.1:${hostPort}${mcpPath}`);
+  if (process.stdin.isTTY) {
+    process.stdin.resume();
+  }
+}
