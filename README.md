@@ -388,9 +388,16 @@ Example MCP tool arguments for VLM extraction:
 
 Configuration lives in `.env`:
 
+- `VLM_PROVIDER`: `ollama` (default) or `openai`. Set `openai` to use any
+  OpenAI-compatible `/chat/completions` server instead of Ollama (llama.cpp's
+  `llama-server`, vLLM, LM Studio, etc).
 - `OLLAMA_URL`: Ollama base URL, default `http://host.docker.internal:11434`
 - `DOCKER_OLLAMA_URL`: Ollama URL used by Docker Compose, default `http://host.docker.internal:11434`
 - `OLLAMA_MODEL`: vision model, default `llama3.2-vision`
+- `OPENAI_BASE_URL`: OpenAI-compatible base URL, used when `VLM_PROVIDER=openai`, default `http://localhost:8080/v1`
+- `DOCKER_OPENAI_BASE_URL`: same, used by Docker Compose, default `http://host.docker.internal:8080/v1`
+- `OPENAI_MODEL`: model name sent to the OpenAI-compatible server, default `default` (most local servers serve whatever's loaded regardless of this value)
+- `OPENAI_API_KEY`: sent as a Bearer token; default `none` works with unauthenticated local servers
 - `API_PORT`: host port exposed by Docker Compose, default `8000`
 - `MCP_TRANSPORT`: `stdio`, `sse`, or `streamable-http`; default in `.env` is `streamable-http`
 - `MCP_HOST`: MCP HTTP bind host, default `0.0.0.0`
@@ -406,7 +413,9 @@ Configuration lives in `.env`:
 Per-request API overrides:
 
 - `model`
-- `ollama_url`
+- `ollama_url` (deprecated alias for `base_url`, Ollama provider only)
+- `provider`
+- `base_url`
 - `response_schema`
 
 ## Local Run
