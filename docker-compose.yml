@@ -10,6 +10,7 @@ services:
       - "${API_PORT:-8000}:8000"
     environment:
       OLLAMA_URL: "${DOCKER_OLLAMA_URL:-http://host.docker.internal:11434}"
+      OPENAI_BASE_URL: "${DOCKER_OPENAI_BASE_URL:-http://host.docker.internal:8080/v1}"
     volumes:
       - ./output:/app/output
     extra_hosts:
@@ -25,6 +26,7 @@ services:
       - "${MCP_PORT:-5455}:${MCP_PORT:-5455}"
     environment:
       OLLAMA_URL: "${DOCKER_OLLAMA_URL:-http://host.docker.internal:11434}"
+      OPENAI_BASE_URL: "${DOCKER_OPENAI_BASE_URL:-http://host.docker.internal:8080/v1}"
       MCP_TRANSPORT: streamable-http
       MCP_HOST: 0.0.0.0
     volumes:

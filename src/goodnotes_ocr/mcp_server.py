@@ -10,7 +10,7 @@ from goodnotes_ocr.extractor import extract_page_images
 from goodnotes_ocr.models import BrowserOptions
 from goodnotes_ocr.pages import parse_pages
 from goodnotes_ocr.pipeline import analyze_pages
-from goodnotes_ocr.vlm import DEFAULT_MODEL, DEFAULT_OLLAMA_URL, OllamaVisionClient
+from goodnotes_ocr.vlm import build_vlm_client
 
 try:
     from mcp.server.fastmcp import FastMCP, Image
@@ -44,8 +44,16 @@ async def extract_goodnotes(
     just_image: bool = False,
     model: str | None = None,
     ollama_url: str | None = None,
+    provider: str | None = None,
+    base_url: str | None = None,
 ) -> Any:
-    """Extract GoodNotes page(s), optionally returning MCP image content."""
+    """Extract GoodNotes page(s), optionally returning MCP image content.
+
+    `provider` selects the VLM backend ('ollama' or 'openai', default from
+    VLM_PROVIDER env var). `base_url` overrides the endpoint for whichever
+    provider is active; `ollama_url` is kept as an Ollama-specific alias for
+    backward compatibility.
+    """
     try:
         return await _extract_goodnotes_async(
             url=url,
@@ -54,7 +62,8 @@ async def extract_goodnotes(
             response_schema=response_schema,
             just_image=just_image,
             model=model,
-            ollama_url=ollama_url,
+            base_url=base_url or ollama_url,
+            provider=provider,
         )
     except (GoodnotesOcrError, ValueError) as exc:
         return {"error": str(exc)}
@@ -68,7 +77,8 @@ async def _extract_goodnotes_async(
     response_schema: dict[str, Any] | None,
     just_image: bool,
     model: str | None,
-    ollama_url: str | None,
+    base_url: str | None,
+    provider: str | None,
 ) -> Any:
     page_selectors = parse_pages(pages)
     browser_options = BrowserOptions(
@@ -99,11 +109,7 @@ async def _extract_goodnotes_async(
     if not isinstance(response_schema, dict):
         raise ValueError("`response_schema` must be a JSON schema object.")
 
-    vlm_client = OllamaVisionClient(
-        base_url=ollama_url or os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL),
-        model=model or os.environ.get("OLLAMA_MODEL", DEFAULT_MODEL),
-        timeout_seconds=int(os.environ.get("VLM_TIMEOUT_SECONDS", "120")),
-    )
+    vlm_client = build_vlm_client(provider=provider, model=model, base_url=base_url)
     results = await analyze_pages(
         source_url=url,
         pages=page_selectors,

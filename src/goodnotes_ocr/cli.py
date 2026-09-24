@@ -16,12 +16,12 @@ from goodnotes_ocr.models import BrowserOptions
 from goodnotes_ocr.pages import parse_pages
 from goodnotes_ocr.pipeline import analyze_pages
 from goodnotes_ocr.urls import parse_page_fragment
-from goodnotes_ocr.vlm import DEFAULT_MODEL, DEFAULT_OLLAMA_URL, OllamaVisionClient
+from goodnotes_ocr.vlm import build_vlm_client
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Extract GoodNotes pages and analyze them with an Ollama VLM."
+        description="Extract GoodNotes pages and analyze them with a vision model."
     )
     parser.add_argument("url", help="GoodNotes share URL or direct PDF URL.")
     parser.add_argument(
@@ -51,14 +51,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory for extracted page images.",
     )
     parser.add_argument(
+        "--provider",
+        default=None,
+        help="VLM backend: 'ollama' or 'openai' (default: VLM_PROVIDER env var, or 'ollama').",
+    )
+    parser.add_argument(
         "--ollama-url",
-        default=os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL),
-        help="Ollama base URL.",
+        default=None,
+        help="Deprecated alias for --base-url (Ollama provider only).",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        help="Base URL for the active provider (default: OLLAMA_URL/OPENAI_BASE_URL env var).",
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("OLLAMA_MODEL", DEFAULT_MODEL),
-        help="Ollama vision model name.",
+        default=None,
+        help="Vision model name for the active provider.",
     )
     parser.add_argument("--headful", action="store_true", help="Show the browser window.")
     parser.add_argument("--timeout-ms", type=int, default=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")))
@@ -115,9 +125,10 @@ async def run(args: argparse.Namespace) -> list[dict[str, object]]:
         raise ValueError("Pass --response-schema when using --prompt.")
     response_schema = _load_response_schema(args.response_schema)
 
-    vlm_client = OllamaVisionClient(
-        base_url=args.ollama_url,
+    vlm_client = build_vlm_client(
+        provider=args.provider,
         model=args.model,
+        base_url=args.base_url or args.ollama_url,
         timeout_seconds=args.vlm_timeout_seconds,
     )
     results = await analyze_pages(

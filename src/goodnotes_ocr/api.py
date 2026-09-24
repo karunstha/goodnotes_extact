@@ -16,7 +16,7 @@ from goodnotes_ocr.image_results import image_batch_to_dicts
 from goodnotes_ocr.models import BrowserOptions
 from goodnotes_ocr.pages import parse_pages
 from goodnotes_ocr.pipeline import analyze_pages
-from goodnotes_ocr.vlm import DEFAULT_MODEL, DEFAULT_OLLAMA_URL, OllamaVisionClient
+from goodnotes_ocr.vlm import build_vlm_client
 
 
 load_env_file()
@@ -36,8 +36,10 @@ class ExtractRequest(BaseModel):
         description="Ollama JSON schema passed as the chat `format` for VLM extraction.",
     )
     just_image: bool = Field(False, description="Return extracted page image(s) without a VLM call.")
-    model: str | None = Field(None, description="Ollama model name.")
-    ollama_url: str | None = Field(None, description="Ollama base URL.")
+    model: str | None = Field(None, description="VLM model name for the active provider.")
+    ollama_url: str | None = Field(None, description="Ollama base URL (Ollama provider only).")
+    provider: str | None = Field(None, description="VLM backend: 'ollama' or 'openai'.")
+    base_url: str | None = Field(None, description="Base URL override for the active provider.")
 
 
 @app.get("/health")
@@ -57,11 +59,10 @@ async def extract(request: ExtractRequest) -> Any:
             viewport_height=int(os.environ.get("VIEWPORT_HEIGHT", "1910")),
             max_probe_page=int(os.environ.get("MAX_PROBE_PAGE", "2000")),
         )
-        vlm_client = OllamaVisionClient(
-            base_url=request.ollama_url
-            or os.environ.get("OLLAMA_URL", DEFAULT_OLLAMA_URL),
-            model=request.model or os.environ.get("OLLAMA_MODEL", DEFAULT_MODEL),
-            timeout_seconds=int(os.environ.get("VLM_TIMEOUT_SECONDS", "120")),
+        vlm_client = build_vlm_client(
+            provider=request.provider,
+            model=request.model,
+            base_url=request.base_url or request.ollama_url,
         )
         output_dir = Path(os.environ.get("OUTPUT_DIR", "output"))
         if request.just_image:

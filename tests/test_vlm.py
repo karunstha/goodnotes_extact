@@ -1,6 +1,17 @@
+import os
 import unittest
+from unittest import mock
 
-from goodnotes_ocr.vlm import _chat_payload, _parse_json_response, _response_text
+from goodnotes_ocr.vlm import (
+    OllamaVisionClient,
+    OpenAIVisionClient,
+    _chat_payload,
+    _openai_chat_payload,
+    _openai_response_text,
+    _parse_json_response,
+    _response_text,
+    build_vlm_client,
+)
 
 
 class VlmTests(unittest.TestCase):
@@ -45,6 +56,64 @@ class VlmTests(unittest.TestCase):
         self.assertIs(payload["stream"], False)
         self.assertIn("read the contents of this page", payload["messages"][0]["content"])
         self.assertEqual(payload["format"], {"type": "object", "properties": {"text": {"type": "string"}}})
+
+    def test_openai_chat_payload_uses_image_url_content(self):
+        payload = _openai_chat_payload(
+            model="default",
+            prompt="read the contents of this page",
+            image_b64="abc123",
+            response_schema={"type": "object", "properties": {"text": {"type": "string"}}},
+            use_schema=True,
+        )
+        self.assertEqual(payload["model"], "default")
+        content = payload["messages"][0]["content"]
+        self.assertEqual(content[1]["image_url"]["url"], "data:image/png;base64,abc123")
+        self.assertIn("read the contents of this page", content[0]["text"])
+        self.assertEqual(payload["response_format"]["json_schema"]["schema"]["type"], "object")
+
+    def test_openai_chat_payload_omits_response_format_without_schema(self):
+        payload = _openai_chat_payload(
+            model="default",
+            prompt="read the contents of this page",
+            image_b64="abc123",
+            response_schema={"type": "object"},
+            use_schema=False,
+        )
+        self.assertNotIn("response_format", payload)
+
+    def test_openai_response_text_reads_choices(self):
+        result = _openai_response_text(
+            {"choices": [{"message": {"content": '{"text_content": "hi"}'}}]}
+        )
+        self.assertEqual(result, '{"text_content": "hi"}')
+
+    def test_build_vlm_client_defaults_to_ollama(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            client = build_vlm_client()
+        self.assertIsInstance(client, OllamaVisionClient)
+
+    def test_build_vlm_client_selects_openai_from_env(self):
+        env = {
+            "VLM_PROVIDER": "openai",
+            "OPENAI_BASE_URL": "http://example.internal:8090/v1",
+            "OPENAI_MODEL": "bonsai2",
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            client = build_vlm_client()
+        self.assertIsInstance(client, OpenAIVisionClient)
+        self.assertEqual(client.base_url, "http://example.internal:8090/v1")
+        self.assertEqual(client.model, "bonsai2")
+
+    def test_build_vlm_client_explicit_args_override_env(self):
+        with mock.patch.dict(os.environ, {"VLM_PROVIDER": "ollama"}, clear=True):
+            client = build_vlm_client(provider="openai", model="m", base_url="http://x/v1")
+        self.assertIsInstance(client, OpenAIVisionClient)
+        self.assertEqual(client.model, "m")
+
+    def test_build_vlm_client_unknown_provider_raises(self):
+        with mock.patch.dict(os.environ, {"VLM_PROVIDER": "bogus"}, clear=True):
+            with self.assertRaises(Exception):
+                build_vlm_client()
 
 
 if __name__ == "__main__":
