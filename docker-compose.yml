@@ -3,6 +3,7 @@ services:
     image: goodnotes
     container_name: goodnotes
     build: .
+    init: true
     command: ["uvicorn", "goodnotes_ocr.api:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file:
       - .env
@@ -20,6 +21,9 @@ services:
     image: goodnotes-vlm-mcp
     container_name: goodnotes-vlm-mcp
     build: .
+    # tini as PID 1 reaps the headless Chromium zombies Playwright leaves behind
+    # after each request; without it they accumulate until the container restarts.
+    init: true
     env_file:
       - .env
     ports:
