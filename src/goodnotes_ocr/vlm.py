@@ -5,8 +5,11 @@ import json
 import os
 import urllib.error
 import urllib.request
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+
+from PIL import Image
 
 from goodnotes_ocr.errors import VlmError
 
@@ -15,6 +18,13 @@ DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_MODEL = "llama3.2-vision"
 DEFAULT_OPENAI_BASE_URL = "http://localhost:8080/v1"
 DEFAULT_OPENAI_MODEL = "default"
+# Full-resolution GoodNotes screenshots (2800x3600+) push some VLM backends
+# (e.g. llama.cpp Qwen-VL style vision encoders) to tens of thousands of image
+# tokens, which can exceed the compute-buffer VRAM a tightly-configured
+# context leaves free. Downscaling the copy we send over the wire (the saved
+# screenshot on disk is untouched) keeps token count sane without losing
+# handwriting legibility.
+DEFAULT_MAX_IMAGE_DIMENSION = 1600
 
 PROMPT_TEMPLATE = """You are analyzing one rendered GoodNotes notebook page image.
 
@@ -186,7 +196,17 @@ def build_vlm_client(
 
 
 def _image_to_base64(image_path: Path) -> str:
-    return base64.b64encode(image_path.read_bytes()).decode("ascii")
+    max_dim = int(
+        os.environ.get("VLM_MAX_IMAGE_DIMENSION", str(DEFAULT_MAX_IMAGE_DIMENSION))
+    )
+    with Image.open(image_path) as img:
+        if max(img.size) <= max_dim:
+            return base64.b64encode(image_path.read_bytes()).decode("ascii")
+        img = img.convert("RGB")
+        img.thumbnail((max_dim, max_dim), Image.LANCZOS)
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
 def _chat_payload(
