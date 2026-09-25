@@ -255,10 +255,12 @@ mcp_servers:
 The streamable HTTP container is expected to stay running while Hermes uses it.
 Stop it with `Ctrl-C` or `docker compose down`.
 
-If you prefer a one-off Docker command without this repo:
+If you prefer a one-off Docker command without this repo (`--init` runs tini as
+PID 1 so it reaps the headless Chromium processes Playwright leaves as zombies
+after each request — without it they accumulate until the container restarts):
 
 ```bash
-docker run --rm \
+docker run --rm --init \
   --name goodnotes-vlm-mcp \
   -p 5455:5455 \
   -e MCP_TRANSPORT=streamable-http \
@@ -283,7 +285,7 @@ For image-only tools, no Ollama variables are required. Use
 To pass individual environment variables:
 
 ```bash
-docker run --rm \
+docker run --rm --init \
   --name goodnotes-vlm-mcp \
   -p 5455:5455 \
   -e MCP_TRANSPORT=streamable-http \
@@ -298,7 +300,7 @@ docker run --rm \
 To use an env file instead:
 
 ```bash
-docker run --rm \
+docker run --rm --init \
   --name goodnotes-vlm-mcp \
   -p 5455:5455 \
   --env-file /absolute/path/to/goodnotes.env \
@@ -409,6 +411,7 @@ Configuration lives in `.env`:
 - `MAX_PROBE_PAGE`: fallback page-count probe limit, default `2000`
 - `PDF_DPI`: direct PDF render DPI if you build a custom image with PDF tooling
 - `VLM_TIMEOUT_SECONDS`: Ollama request timeout, default `120`
+- `VLM_MAX_IMAGE_DIMENSION`: longest edge (px) the screenshot is downscaled to before base64-encoding for the VLM request, default `1600`; the saved screenshot on disk is unaffected. Lower this if your VLM backend has limited VRAM/context headroom for vision tokens.
 
 Per-request API overrides:
 
