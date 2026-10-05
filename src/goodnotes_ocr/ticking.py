@@ -19,11 +19,14 @@ from goodnotes_ocr.pages import PageSelector
 TOOLBAR_BOTTOM = 110  # CSS px: the floating pen toolbar covers the page above this when signed in
 PRESET_RED = 5        # index of red in the 3x5 pen colour grid
 
-# Box-relative. Drawn backwards, from clear paper above-right down to the corner and up the short leg:
-# a stroke that starts inside a filled box is flattened into a straight line (or selects the box).
-CHECKMARK = ((1.25, -0.25), (0.40, 0.82), (0.18, 0.48))
-SLASH_STARTS = ((1.40, -0.40), (1.15, -0.60), (0.90, -0.70), (0.60, -0.75))  # box-relative, above the box
-SLASH_END = (0.22, 0.84)
+# The mark is drawn backwards: from clear paper above the box's top-right corner, down to the
+# corner of the V, then up the short leg. A press on or close to a box selects the box instead of
+# inking (and one that starts inside a filled box is flattened into a straight line), so the
+# start is a fixed distance from the corner, whatever the box size.
+STARTS = ((28, -28), (18, -38), (4, -44), (-14, -46))  # CSS px from the top-right corner; first on clear paper wins
+CHECK_CORNER, CHECK_END = (0.40, 0.82), (0.18, 0.48)   # box-relative
+SLASH_END = (0.22, 0.84)                                # box-relative
+MAX_INK_CHANGE = 1500  # screenshot px of non-red ink allowed to change when a mark is drawn across the outline
 
 # Overlays that cover part of the page in an anonymous session.
 HIDE_OVERLAYS = """
@@ -198,54 +201,56 @@ async def tick_checkbox(url: str, page: PageSelector, n: int, count: int, option
         def css(fx: float, fy: float) -> tuple[float, float]:  # box-relative -> CSS px
             return (box.x0 + fx * box.w) / s, (box.y0 + fy * box.h) / s
 
-        ink, red_before = ink_masks(shot)
-        # Fallback slash: a mouse press on or right next to a box selects it, so start on clear
-        # paper above it. (Not from the left: that margin is the comment gutter.)
-        slash_start = None
-        for f in SLASH_STARTS:
-            x, y = (int(c * s) for c in css(*f))
-            r = int(8 * s)
-            if y - r > TOOLBAR_BOTTOM * s and not ink[y - r:y + r, x - r:x + r].any():
-                slash_start = css(*f)
+        ink_before, red_before = ink_masks(shot)
+        start = None
+        for dx, dy in STARTS:
+            cx, cy = box.x1 / s + dx, box.y0 / s + dy
+            x, y, r = int(cx * s), int(cy * s), int(8 * s)
+            if y - r > TOOLBAR_BOTTOM * s and not ink_before[y - r:y + r, x - r:x + r].any():
+                start = (cx, cy)
                 break
+        if start is None:
+            return {"status": "failed", "detail": "no clear paper above the box to start the stroke from; nothing drawn"}
 
         pad = int(0.8 * max(box.w, box.h))
         region = (slice(max(0, box.y0 - pad), box.y1 + pad), slice(max(0, box.x0 - pad), box.x1 + pad))
 
-        async def new_red():
-            return ink_masks(_page_only(await _shot(browser), rect, s, True))[1] & ~red_before
+        async def changes() -> tuple[Any, int]:
+            """(new red ink, how much non-red ink changed) since before drawing, with nothing selected."""
+            await pg.keyboard.press("Escape")  # drop any selection so its menu isn't read as ink
+            await pg.wait_for_timeout(500)
+            ink_now, red_now = ink_masks(_page_only(await _shot(browser), rect, s, True))
+            return red_now & ~red_before, int((ink_now ^ ink_before).sum())
 
-        async def attempt(draw, top_limit: float) -> tuple[str, str]:
-            """Draw, then judge the new red ink. Returns (verdict, detail); cleans up unless 'ok'."""
+        async def attempt(draw) -> tuple[str, str]:
+            """Draw, then judge what changed. Returns (verdict, detail); cleans up unless 'ok'."""
             await draw()
             await pg.wait_for_timeout(1500)
-            drawn = await new_red()
-            inside = drawn[region].sum()
-            outside = drawn.sum() - inside
+            drawn, moved = await changes()
+            inside = int(drawn[region].sum())
+            outside = int(drawn.sum()) - inside
+            if inside + outside < 30 and moved <= MAX_INK_CHANGE:
+                return "no_ink", "the page did not take the stroke as ink; nothing was drawn"
             ys, _ = drawn.nonzero()
             low, high = ((ys.max() - box.y0) / box.h, (ys.min() - box.y0) / box.h) if len(ys) else (0.0, 0.0)
-            selected = (await pg.evaluate(PEN_STATE))["tool"] != "pen"
-            if selected or inside < 30:
-                await pg.keyboard.press("Escape")  # drops a selection and returns to the pen
-                await pg.wait_for_timeout(500)
-                return "no_ink", "the page did not take the stroke as ink; nothing was drawn"
-            # The mark must run from the top of the box (or above it) down into its lower half.
-            if outside < 20 and inside >= 0.01 * box.w * box.h and low > 0.6 and high < top_limit:
+            # The mark must run from above the box down into its lower half, and nothing else may move.
+            if moved <= MAX_INK_CHANGE and outside < 20 and inside >= 0.01 * box.w * box.h and low > 0.6 and high < 0.0:
                 return "ok", ""
             await pg.keyboard.press("Control+z")
             await pg.wait_for_timeout(1000)
-            left = int((await new_red()).sum())
+            left, still_moved = await changes()
+            clean = int(left.sum()) < 20 and still_moved <= MAX_INK_CHANGE
             return "wrong", (
-                f"stroke landed wrong (inside={int(inside)}px, outside={int(outside)}px, "
+                f"stroke landed wrong (inside={inside}px, outside={outside}px, other ink changed={moved}px, "
                 f"reaches {high:.0%} to {low:.0%} down the box); "
-                + ("undone" if left < 20 else f"UNDO DID NOT CLEAR IT ({left}px left)")
+                + ("undone" if clean else f"UNDO DID NOT CLEAR IT ({int(left.sum())}px red left, {still_moved}px other ink changed)")
             )
 
         mark = "check"
-        verdict, detail = await attempt(lambda: _stylus_stroke(pg, [css(*f) for f in CHECKMARK]), top_limit=0.3)
-        if verdict == "no_ink" and slash_start is not None:
+        verdict, detail = await attempt(lambda: _stylus_stroke(pg, [start, css(*CHECK_CORNER), css(*CHECK_END)]))
+        if verdict == "no_ink":
             mark = "slash"
-            verdict, detail = await attempt(lambda: _mouse_stroke(pg, slash_start, css(*SLASH_END)), top_limit=0.0)
+            verdict, detail = await attempt(lambda: _mouse_stroke(pg, start, css(*SLASH_END)))
         if verdict != "ok":
             return {"status": "failed", "detail": detail}
 
