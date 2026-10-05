@@ -9,6 +9,7 @@ import io
 from dataclasses import replace
 from typing import Any
 
+import numpy as np
 from PIL import Image
 
 from goodnotes_ocr.browser import PAGE_RECT_SCRIPT, GoodnotesBrowser
@@ -19,10 +20,11 @@ from goodnotes_ocr.pages import PageSelector
 TOOLBAR_BOTTOM = 110  # CSS px: the floating pen toolbar covers the page above this when signed in
 PRESET_RED = 5        # index of red in the 3x5 pen colour grid
 
-# The mark is drawn backwards: from clear paper above the box's top-right corner, down to the
-# corner of the V, then up the short leg. A press on or close to a box selects the box instead of
-# inking (and one that starts inside a filled box is flattened into a straight line), so the
-# start is a fixed distance from the corner, whatever the box size.
+# The mark is two stylus strokes: the long leg from clear paper above the box's top-right corner
+# down to the corner of the V, then the short leg into the same corner. Drawn as one stroke, a
+# small V is smoothed by the canvas into a straight line or an arc. A mouse press on or close to
+# a box selects the box instead of inking, so the start is a fixed distance from the corner,
+# whatever the box size.
 STARTS = ((28, -28), (18, -38), (4, -44), (-14, -46))  # CSS px from the top-right corner; first on clear paper wins
 CHECK_CORNER, CHECK_END = (0.40, 0.82), (0.18, 0.48)   # box-relative
 SLASH_END = (0.22, 0.84)                                # box-relative
@@ -197,6 +199,13 @@ async def tick_checkbox(url: str, page: PageSelector, n: int, count: int, option
         pen = await _select_red_pen(pg)
         if pen["tool"] != "pen" or not _is_red(pen["rgb"]):
             return {"status": "failed", "detail": f"toolbar is {pen}, not a red pen; nothing drawn"}
+        # The page can settle a pixel after the first screenshot; measure against a fresh one.
+        await pg.wait_for_timeout(500)
+        shot = _page_only(await _shot(browser), rect, s, True)
+        boxes = find_checkboxes(shot, scale=s)
+        if len(boxes) != count or boxes[n - 1].ticked:
+            return {"status": "failed", "detail": "the page changed while it was being read; nothing drawn"}
+        box = boxes[n - 1]
 
         def css(fx: float, fy: float) -> tuple[float, float]:  # box-relative -> CSS px
             return (box.x0 + fx * box.w) / s, (box.y0 + fy * box.h) / s
@@ -220,11 +229,20 @@ async def tick_checkbox(url: str, page: PageSelector, n: int, count: int, option
             await pg.keyboard.press("Escape")  # drop any selection so its menu isn't read as ink
             await pg.wait_for_timeout(500)
             ink_now, red_now = ink_masks(_page_only(await _shot(browser), rect, s, True))
+            # The page can sit a pixel or two off from where it was before the first input;
+            # line the two screenshots up before comparing them.
+            strip = (slice(None), slice(max(0, box.x0 - 100), box.x1 + 600))
+            dy, dx = min(((dy, dx) for dy in range(-4, 5) for dx in range(-4, 5)),
+                         key=lambda d: int((np.roll(ink_now[strip], d, (0, 1)) ^ ink_before[strip]).sum()))
+            ink_now, red_now = np.roll(ink_now, (dy, dx), (0, 1)), np.roll(red_now, (dy, dx), (0, 1))
             return red_now & ~red_before, int((ink_now ^ ink_before).sum())
 
         async def attempt(draw) -> tuple[str, str]:
-            """Draw, then judge what changed. Returns (verdict, detail); cleans up unless 'ok'."""
-            await draw()
+            """Draw, then judge what changed. Returns (verdict, detail); cleans up unless 'ok'.
+
+            draw returns how many strokes it made, which is how many undos take the mark back.
+            """
+            strokes = await draw()
             await pg.wait_for_timeout(1500)
             drawn, moved = await changes()
             inside = int(drawn[region].sum())
@@ -236,9 +254,11 @@ async def tick_checkbox(url: str, page: PageSelector, n: int, count: int, option
             # The mark must run from above the box down into its lower half, and nothing else may move.
             if moved <= MAX_INK_CHANGE and outside < 20 and inside >= 0.01 * box.w * box.h and low > 0.6 and high < 0.0:
                 return "ok", ""
-            await pg.keyboard.press("Control+z")
-            await pg.wait_for_timeout(1000)
+            for _ in range(strokes):
+                await pg.keyboard.press("Control+z")
+                await pg.wait_for_timeout(1000)
             left, still_moved = await changes()
+            await pg.wait_for_timeout(5000)  # let the undo sync before the browser closes
             clean = int(left.sum()) < 20 and still_moved <= MAX_INK_CHANGE
             return "wrong", (
                 f"stroke landed wrong (inside={inside}px, outside={outside}px, other ink changed={moved}px, "
@@ -246,11 +266,23 @@ async def tick_checkbox(url: str, page: PageSelector, n: int, count: int, option
                 + ("undone" if clean else f"UNDO DID NOT CLEAR IT ({int(left.sum())}px red left, {still_moved}px other ink changed)")
             )
 
+        async def draw_check() -> int:
+            await _stylus_stroke(pg, [start, css(*CHECK_CORNER)])
+            await pg.wait_for_timeout(600)
+            if not (await changes())[0].any():
+                return 0  # the long leg left no ink; don't press inside the box
+            await _stylus_stroke(pg, [css(*CHECK_END), css(*CHECK_CORNER)])
+            return 2
+
+        async def draw_slash() -> int:
+            await _mouse_stroke(pg, start, css(*SLASH_END))
+            return 1
+
         mark = "check"
-        verdict, detail = await attempt(lambda: _stylus_stroke(pg, [start, css(*CHECK_CORNER), css(*CHECK_END)]))
+        verdict, detail = await attempt(draw_check)
         if verdict == "no_ink":
             mark = "slash"
-            verdict, detail = await attempt(lambda: _mouse_stroke(pg, start, css(*SLASH_END)))
+            verdict, detail = await attempt(draw_slash)
         if verdict != "ok":
             return {"status": "failed", "detail": detail}
 
