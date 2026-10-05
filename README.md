@@ -386,6 +386,44 @@ Example MCP tool arguments for VLM extraction:
 }
 ```
 
+### Checkbox tools
+
+Two more MCP tools work on a to-do page where every task starts with a hand-drawn checkbox.
+Both find the boxes from pixels alone; neither calls a model.
+
+- `list_checkboxes(url, page="last")` returns the boxes top to bottom:
+  `{"page": 23, "count": 7, "checkboxes": [{"n": 1, "ticked": false}, ...]}`.
+  A box is ticked when it has red ink in it. Read-only, works on the plain share link.
+- `tick_checkbox(url, page, n, count)` draws a red checkmark in box `n`. `count` is the number
+  of tasks in the caller's own list for that page (for example the list `extract_goodnotes`
+  returned); if the page shows a different number of boxes, nothing is drawn. Statuses: `ok`,
+  `already_ticked`, `count_mismatch`, `not_found`, `session_expired`, `no_session`, `not_saved`,
+  `failed`.
+
+Ticking draws on the page, so it needs a signed-in GoodNotes session with edit access to the
+notebook. Capture one with Playwright on a machine with a display, then point the server at it:
+
+```bash
+npx playwright codegen --save-storage=goodnotes-state.json https://web.goodnotes.com/s/<share-id>
+# sign in, check the page is no longer Read Only, close the window
+docker run ... -v /path/to/goodnotes-state.json:/state/state.json:ro \
+  -e GOODNOTES_STORAGE_STATE=/state/state.json goodnotes-vlm-mcp
+```
+
+The file is a live login: keep it out of the repo and readable only by its owner. When the
+session expires the page opens Read Only again and `tick_checkbox` returns `session_expired`.
+
+Things worth knowing about how it draws:
+
+- The stroke is sent as stylus input. A mouse drag on the GoodNotes canvas becomes one straight
+  line from press to release, and a mouse press on a box selects the box instead of inking.
+- If the stylus stroke isn't taken as ink, it falls back to a single mouse slash that starts on
+  clear paper above the box. The result reports which was drawn (`"mark": "check" | "slash"`).
+- After drawing it checks the new red ink is in and around that box only; if not, it undoes the
+  stroke and returns `failed`. Then it reloads the page to confirm the mark was saved.
+- It selects the pen tool and the red preset in the toolbar. GoodNotes remembers both on the
+  account, so the web pen stays red afterwards.
+
 ## Configuration
 
 Configuration lives in `.env`:
@@ -409,6 +447,7 @@ Configuration lives in `.env`:
 - `BROWSER_TIMEOUT_MS`: page load timeout, default `60000`
 - `BROWSER_SETTLE_MS`: render settle delay, default `6000`
 - `MAX_PROBE_PAGE`: fallback page-count probe limit, default `2000`
+- `GOODNOTES_STORAGE_STATE`: path to a Playwright storage-state file for a signed-in GoodNotes session; unset by default, required only by `tick_checkbox`
 - `PDF_DPI`: direct PDF render DPI if you build a custom image with PDF tooling
 - `VLM_TIMEOUT_SECONDS`: Ollama request timeout, default `120`
 - `VLM_MAX_IMAGE_DIMENSION`: longest edge (px) the screenshot is downscaled to before base64-encoding for the VLM request, default `1600`; the saved screenshot on disk is unaffected. Lower this if your VLM backend has limited VRAM/context headroom for vision tokens.

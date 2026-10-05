@@ -10,6 +10,8 @@ from goodnotes_ocr.extractor import extract_page_images
 from goodnotes_ocr.models import BrowserOptions
 from goodnotes_ocr.pages import parse_pages
 from goodnotes_ocr.pipeline import analyze_pages
+from goodnotes_ocr.ticking import list_checkboxes as _list_checkboxes
+from goodnotes_ocr.ticking import tick_checkbox as _tick_checkbox
 from goodnotes_ocr.vlm import build_vlm_client
 
 try:
@@ -69,6 +71,18 @@ async def extract_goodnotes(
         return {"error": str(exc)}
 
 
+def _browser_options() -> BrowserOptions:
+    return BrowserOptions(
+        headless=True,
+        timeout_ms=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")),
+        settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "6000")),
+        viewport_width=int(os.environ.get("VIEWPORT_WIDTH", "1500")),
+        viewport_height=int(os.environ.get("VIEWPORT_HEIGHT", "1910")),
+        max_probe_page=int(os.environ.get("MAX_PROBE_PAGE", "2000")),
+        storage_state=os.environ.get("GOODNOTES_STORAGE_STATE") or None,
+    )
+
+
 async def _extract_goodnotes_async(
     *,
     url: str,
@@ -81,14 +95,7 @@ async def _extract_goodnotes_async(
     provider: str | None,
 ) -> Any:
     page_selectors = parse_pages(pages)
-    browser_options = BrowserOptions(
-        headless=True,
-        timeout_ms=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")),
-        settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "6000")),
-        viewport_width=int(os.environ.get("VIEWPORT_WIDTH", "1500")),
-        viewport_height=int(os.environ.get("VIEWPORT_HEIGHT", "1910")),
-        max_probe_page=int(os.environ.get("MAX_PROBE_PAGE", "2000")),
-    )
+    browser_options = _browser_options()
     output_dir = Path(os.environ.get("OUTPUT_DIR", "output"))
 
     if just_image:
@@ -130,6 +137,42 @@ async def extract_goodnotes_image(
 ) -> Any:
     """Extract GoodNotes page image(s) and return MCP Image content."""
     return await extract_goodnotes(url=url, pages=pages, just_image=True)
+
+
+def _single_page(page: int | str) -> int | str:
+    selectors = parse_pages(page)
+    if len(selectors) != 1:
+        raise ValueError("`page` must be a single page number or 'last'.")
+    return selectors[0]
+
+
+@mcp.tool()
+async def list_checkboxes(url: str, page: int | str = "last") -> Any:
+    """List the hand-drawn checkboxes on one GoodNotes page, top to bottom.
+
+    Returns {"page", "count", "checkboxes": [{"n", "ticked"}]}. A box is ticked when it has
+    red ink in it. Read-only; found from pixels, no model call.
+    """
+    try:
+        return await _list_checkboxes(url, _single_page(page), _browser_options())
+    except (GoodnotesOcrError, ValueError) as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool()
+async def tick_checkbox(url: str, page: int | str, n: int, count: int) -> Any:
+    """Draw a red checkmark in the n-th checkbox (1-based, top to bottom) of one GoodNotes page.
+
+    `count` is the number of tasks in the caller's own list for that page; if the page shows a
+    different number of checkboxes nothing is drawn (status "count_mismatch"). Returns
+    {"status": "ok" | "already_ticked" | "count_mismatch" | "not_found" | "session_expired" |
+    "no_session" | "not_saved" | "failed", ...}. Needs GOODNOTES_STORAGE_STATE (a Playwright
+    storage-state file for a signed-in GoodNotes session with edit access). No model call.
+    """
+    try:
+        return await _tick_checkbox(url, _single_page(page), n, count, _browser_options())
+    except (GoodnotesOcrError, ValueError) as exc:
+        return {"error": str(exc)}
 
 
 if __name__ == "__main__":

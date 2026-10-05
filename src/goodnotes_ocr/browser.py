@@ -250,6 +250,7 @@ class GoodnotesBrowser:
                 "height": self.options.viewport_height,
             },
             device_scale_factor=self.options.device_scale_factor,
+            storage_state=self.options.storage_state,
         )
         self._page = await self._context.new_page()
         self._page.on("response", self._queue_pdf_response)

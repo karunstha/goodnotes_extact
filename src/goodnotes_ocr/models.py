@@ -14,6 +14,8 @@ class BrowserOptions:
     viewport_height: int = 1910
     device_scale_factor: float = 2.0
     max_probe_page: int = 2_000
+    # Playwright storage-state file for a signed-in session; needed only to draw on a page.
+    storage_state: str | None = None
 
 
 @dataclass(frozen=True)
