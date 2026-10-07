@@ -95,7 +95,10 @@ def find_checkboxes(img: Image.Image, scale: float = 2.0) -> list[Checkbox]:
             continue
         if not 0.45 <= w / h <= 2.2:
             continue
-        region = lab[sl] == i
+        # Judge the shape by the blue outline alone: red inside the box's own bounds goes back
+        # to its interior. Otherwise a tick that runs along an edge dents the empty region and
+        # a real box fails the straight-sides test.
+        region = ndimage.binary_fill_holes((lab[sl] == i) | red[sl])
         if region.mean() < 0.6 or sorted(_corner_gaps(region))[1] > 0.08 or _edge_bend(region) > 0.022:
             continue
         found.append((ys.start, xs.start, ys.stop, xs.stop))

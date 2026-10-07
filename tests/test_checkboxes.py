@@ -1,10 +1,12 @@
 import unittest
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 
 from goodnotes_ocr.checkboxes import find_checkboxes
 
 BLUE, RED = (0, 122, 255), (255, 2, 2)
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def page(boxes, ticked=(), extra=None):
@@ -35,6 +37,19 @@ class FindCheckboxesTests(unittest.TestCase):
     def test_a_tick_crossing_the_outline_does_not_hide_the_box(self):
         boxes = find_checkboxes(page([(200, 300, 120), (200, 600, 120)], ticked={0, 1}))
         self.assertEqual(len(boxes), 2)
+
+    def test_a_hand_drawn_tick_running_along_an_edge_does_not_hide_the_box(self):
+        # A real box whose tick hugs the bottom-left of the outline before leaving top-right.
+        img = page([(250, 300, 150), (250, 900, 150)])
+        img.paste(Image.open(FIXTURES / "hand_ticked_box.png"), (203, 560))
+        boxes = find_checkboxes(img)
+        self.assertEqual([b.ticked for b in boxes], [False, True, False])
+
+    def test_a_slash_cutting_the_box_in_two_does_not_hide_it(self):
+        def slash(d):
+            d.line([(170, 750), (350, 570)], fill=RED, width=10)
+        boxes = find_checkboxes(page([(200, 300, 120), (200, 600, 120)], extra=slash))
+        self.assertEqual([b.ticked for b in boxes], [False, True])
 
     def test_round_letters_are_not_boxes(self):
         def letters(d):
