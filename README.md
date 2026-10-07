@@ -388,8 +388,8 @@ Example MCP tool arguments for VLM extraction:
 
 ### Checkbox tools
 
-Two more MCP tools work on a to-do page where every task starts with a hand-drawn checkbox.
-Both find the boxes from pixels alone; neither calls a model.
+Three more MCP tools work on a to-do page where every task starts with a hand-drawn checkbox.
+All find the boxes from pixels alone; none calls a model.
 
 - `list_checkboxes(url, page="last")` returns the boxes top to bottom:
   `{"page": 23, "count": 7, "checkboxes": [{"n": 1, "ticked": false}, ...]}`.
@@ -399,8 +399,13 @@ Both find the boxes from pixels alone; neither calls a model.
   returned); if the page shows a different number of boxes, nothing is drawn. Statuses: `ok`,
   `already_ticked`, `count_mismatch`, `not_found`, `session_expired`, `no_session`, `not_saved`,
   `failed`.
+- `add_task(url, page, text, count)` appends a line below the last checkbox: a blue box drawn
+  to match the existing ones, with `text` typed beside it using the text tool. `count` works as
+  in `tick_checkbox`; on `ok` the new line is box `count + 1`. It adds nothing if the space
+  below the last box already has ink on it or the page has no room (`page_full`). Statuses:
+  `ok`, `count_mismatch`, `page_full`, `session_expired`, `no_session`, `not_saved`, `failed`.
 
-Ticking draws on the page, so it needs a signed-in GoodNotes session with edit access to the
+Ticking and adding draw on the page, so they need a signed-in GoodNotes session with edit access to the
 notebook. Capture one with Playwright on a machine with a display, then point the server at it:
 
 ```bash
@@ -447,7 +452,7 @@ Configuration lives in `.env`:
 - `BROWSER_TIMEOUT_MS`: page load timeout, default `60000`
 - `BROWSER_SETTLE_MS`: render settle delay, default `6000`
 - `MAX_PROBE_PAGE`: fallback page-count probe limit, default `2000`
-- `GOODNOTES_STORAGE_STATE`: path to a Playwright storage-state file for a signed-in GoodNotes session; unset by default, required only by `tick_checkbox`
+- `GOODNOTES_STORAGE_STATE`: path to a Playwright storage-state file for a signed-in GoodNotes session; unset by default, required only by `tick_checkbox` and `add_task`
 - `PDF_DPI`: direct PDF render DPI if you build a custom image with PDF tooling
 - `VLM_TIMEOUT_SECONDS`: Ollama request timeout, default `120`
 - `VLM_MAX_IMAGE_DIMENSION`: longest edge (px) the screenshot is downscaled to before base64-encoding for the VLM request, default `1600`; the saved screenshot on disk is unaffected. Lower this if your VLM backend has limited VRAM/context headroom for vision tokens.

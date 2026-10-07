@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from goodnotes_ocr.adding import add_task as _add_task
 from goodnotes_ocr.config import load_env_file
 from goodnotes_ocr.errors import GoodnotesOcrError
 from goodnotes_ocr.extractor import extract_page_images
@@ -171,6 +172,22 @@ async def tick_checkbox(url: str, page: int | str, n: int, count: int) -> Any:
     """
     try:
         return await _tick_checkbox(url, _single_page(page), n, count, _browser_options())
+    except (GoodnotesOcrError, ValueError) as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool()
+async def add_task(url: str, page: int | str, text: str, count: int) -> Any:
+    """Append a new unticked checkbox with typed text below the last checkbox of one GoodNotes page.
+
+    `count` is the number of tasks in the caller's own list for that page; if the page shows a
+    different number of checkboxes nothing is added (status "count_mismatch"). On "ok" the new
+    line is checkbox `n` of `count`. Returns {"status": "ok" | "count_mismatch" | "page_full" |
+    "session_expired" | "no_session" | "not_saved" | "failed", ...}. Needs
+    GOODNOTES_STORAGE_STATE, like tick_checkbox. No model call.
+    """
+    try:
+        return await _add_task(url, _single_page(page), text, count, _browser_options())
     except (GoodnotesOcrError, ValueError) as exc:
         return {"error": str(exc)}
 
