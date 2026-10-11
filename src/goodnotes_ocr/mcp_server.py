@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from goodnotes_ocr.adding import add_task as _add_task
 from goodnotes_ocr.config import load_env_file
@@ -17,6 +19,7 @@ from goodnotes_ocr.vlm import build_vlm_client
 
 try:
     from mcp.server.fastmcp import FastMCP, Image
+    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 except ImportError as exc:  # pragma: no cover - import guard for optional runtime dependency
     raise SystemExit(
         "The MCP server requires the `mcp` package. Install requirements.txt first."
@@ -29,6 +32,11 @@ MCP_TRANSPORT = os.environ.get("MCP_TRANSPORT", "streamable-http")
 MCP_HOST = os.environ.get("MCP_HOST", "127.0.0.1")
 MCP_PORT = int(os.environ.get("MCP_PORT", "5455"))
 MCP_PATH = os.environ.get("MCP_PATH", "/mcp")
+# After this many browser calls in a row end in a Playwright timeout, the server exits so the
+# container's restart policy brings it back fresh. 0 turns it off.
+BROWSER_STALL_RESTART = int(os.environ.get("BROWSER_STALL_RESTART", "3"))
+
+_stalls = 0
 
 mcp = FastMCP(
     "goodnotes-vlm",
@@ -57,19 +65,35 @@ async def extract_goodnotes(
     provider is active; `ollama_url` is kept as an Ollama-specific alias for
     backward compatibility.
     """
+    return await _guarded(lambda: _extract_goodnotes_async(
+        url=url,
+        pages=pages,
+        prompt=prompt,
+        response_schema=response_schema,
+        just_image=just_image,
+        model=model,
+        base_url=base_url or ollama_url,
+        provider=provider,
+    ))
+
+
+async def _guarded(call: Callable[[], Awaitable[Any]]) -> Any:
+    """Run one browser tool call, turning errors into {"error"} and counting timeouts in a row."""
+    global _stalls
     try:
-        return await _extract_goodnotes_async(
-            url=url,
-            pages=pages,
-            prompt=prompt,
-            response_schema=response_schema,
-            just_image=just_image,
-            model=model,
-            base_url=base_url or ollama_url,
-            provider=provider,
-        )
-    except (GoodnotesOcrError, ValueError) as exc:
+        result = await call()
+    except PlaywrightTimeoutError as exc:
+        _stalls += 1
+        if BROWSER_STALL_RESTART and _stalls >= BROWSER_STALL_RESTART:
+            print(f"{_stalls} browser timeouts in a row; exiting so the server restarts", file=sys.stderr)
+            asyncio.get_running_loop().call_later(1, os._exit, 75)
+            return {"error": f"{exc} ({_stalls} timeouts in a row: the server is restarting, retry in ~30s)"}
         return {"error": str(exc)}
+    except (GoodnotesOcrError, ValueError) as exc:
+        _stalls = 0
+        return {"error": str(exc)}
+    _stalls = 0
+    return result
 
 
 def _browser_options() -> BrowserOptions:
@@ -154,10 +178,7 @@ async def list_checkboxes(url: str, page: int | str = "last") -> Any:
     Returns {"page", "count", "checkboxes": [{"n", "ticked"}]}. A box is ticked when it has
     red ink in it. Read-only; found from pixels, no model call.
     """
-    try:
-        return await _list_checkboxes(url, _single_page(page), _browser_options())
-    except (GoodnotesOcrError, ValueError) as exc:
-        return {"error": str(exc)}
+    return await _guarded(lambda: _list_checkboxes(url, _single_page(page), _browser_options()))
 
 
 @mcp.tool()
@@ -170,10 +191,7 @@ async def tick_checkbox(url: str, page: int | str, n: int, count: int) -> Any:
     "no_session" | "not_saved" | "failed", ...}. Needs GOODNOTES_STORAGE_STATE (a Playwright
     storage-state file for a signed-in GoodNotes session with edit access). No model call.
     """
-    try:
-        return await _tick_checkbox(url, _single_page(page), n, count, _browser_options())
-    except (GoodnotesOcrError, ValueError) as exc:
-        return {"error": str(exc)}
+    return await _guarded(lambda: _tick_checkbox(url, _single_page(page), n, count, _browser_options()))
 
 
 @mcp.tool()
@@ -186,10 +204,7 @@ async def add_task(url: str, page: int | str, text: str, count: int) -> Any:
     "session_expired" | "no_session" | "not_saved" | "failed", ...}. Needs
     GOODNOTES_STORAGE_STATE, like tick_checkbox. No model call.
     """
-    try:
-        return await _add_task(url, _single_page(page), text, count, _browser_options())
-    except (GoodnotesOcrError, ValueError) as exc:
-        return {"error": str(exc)}
+    return await _guarded(lambda: _add_task(url, _single_page(page), text, count, _browser_options()))
 
 
 if __name__ == "__main__":
