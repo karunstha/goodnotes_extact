@@ -160,7 +160,7 @@ class OpenAIVisionClient:
                 f"Could not reach OpenAI-compatible endpoint at {self.base_url}: {exc.reason}"
             ) from exc
         except json.JSONDecodeError as exc:
-            raise VlmError("OpenAI-compatible endpoint returned non-JSON HTTP response.") from exc
+            raise VlmError("OpenAI-compatible endpoint returned non-JSON HTTP response: " + str(exc)) from exc
 
 
 def build_vlm_client(

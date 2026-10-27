@@ -212,6 +212,10 @@ class PageMetrics:
         )
 
 
+PDF_CAPTURE_TIMEOUT_SECONDS = 10
+CLOSE_TIMEOUT_SECONDS = 15
+
+
 class GoodnotesBrowser:
     def __init__(self, options: BrowserOptions | None = None):
         self.options = options or BrowserOptions()
@@ -244,27 +248,46 @@ class GoodnotesBrowser:
                 "installed, run `python -m playwright install chromium`. "
                 f"Original error: {exc}"
             ) from exc
-        self._context = await self._browser.new_context(
-            viewport={
-                "width": self.options.viewport_width,
-                "height": self.options.viewport_height,
-            },
-            device_scale_factor=self.options.device_scale_factor,
-            storage_state=self.options.storage_state,
-        )
-        self._page = await self._context.new_page()
-        self._page.on("response", self._queue_pdf_response)
+        try:
+            self._context = await self._browser.new_context(
+                viewport={
+                    "width": self.options.viewport_width,
+                    "height": self.options.viewport_height,
+                },
+                device_scale_factor=self.options.device_scale_factor,
+                storage_state=self.options.storage_state,
+            )
+            self._page = await self._context.new_page()
+            self._page.on("response", self._queue_pdf_response)
+        except BaseException:
+            await self.__aexit__(None, None, None)
+            raise
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
-        if self._response_tasks:
-            await asyncio.gather(*self._response_tasks, return_exceptions=True)
-        if self._context:
-            await self._context.close()
-        if self._browser:
-            await self._browser.close()
-        if self._playwright:
-            await self._playwright.stop()
+        await self._drain_response_tasks()
+        # Each step is isolated so a failure in one never leaves Chromium running.
+        for closer in (
+            self._context and self._context.close,
+            self._browser and self._browser.close,
+            self._playwright and self._playwright.stop,
+        ):
+            if closer is None:
+                continue
+            try:
+                await asyncio.wait_for(closer(), CLOSE_TIMEOUT_SECONDS)
+            except Exception:
+                pass
+        self._context = self._browser = self._playwright = None
+
+    async def _drain_response_tasks(self) -> None:
+        """Wait briefly for PDF captures, then cancel any stalled ones."""
+        tasks = [task for task in self._response_tasks if not task.done()]
+        if tasks:
+            _, pending = await asyncio.wait(tasks, timeout=PDF_CAPTURE_TIMEOUT_SECONDS)
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
 
     @property
     def page(self):
@@ -318,8 +341,7 @@ class GoodnotesBrowser:
         return output_path
 
     async def save_captured_pdf(self, output_path: Path) -> Path | None:
-        if self._response_tasks:
-            await asyncio.gather(*self._response_tasks, return_exceptions=True)
+        await self._drain_response_tasks()
         if not self._pdf_responses:
             return None
         output_path.parent.mkdir(parents=True, exist_ok=True)
