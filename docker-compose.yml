@@ -18,9 +18,11 @@ services:
       - "host.docker.internal:host-gateway"
 
   goodnotes-mcp:
-    image: goodnotes-vlm-mcp
+    image: goodnotes
     container_name: goodnotes-vlm-mcp
-    build: .
+    command: ["python", "-m", "goodnotes_ocr.mcp_server"]
+    depends_on:
+      - goodnotes
     # tini as PID 1 reaps the headless Chromium zombies Playwright leaves behind
     # after each request; without it they accumulate until the container restarts.
     init: true
