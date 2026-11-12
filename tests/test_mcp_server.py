@@ -54,3 +54,14 @@ def test_value_errors_still_become_error_results(monkeypatch):
     results, exits = _run([bad], monkeypatch)
     assert results == [{"error": "`page` must be a single page number or 'last'."}]
     assert exits == []
+
+
+def test_extract_scale_is_separate_from_drawing_scale(monkeypatch):
+    monkeypatch.delenv("DEVICE_SCALE_FACTOR", raising=False)
+    monkeypatch.delenv("EXTRACT_DEVICE_SCALE_FACTOR", raising=False)
+    assert mcp_server._browser_options().device_scale_factor == 2.0
+    assert mcp_server._browser_options(extract=True).device_scale_factor == 2.0
+
+    monkeypatch.setenv("EXTRACT_DEVICE_SCALE_FACTOR", "1.0")
+    assert mcp_server._browser_options(extract=True).device_scale_factor == 1.0
+    assert mcp_server._browser_options().device_scale_factor == 2.0

@@ -96,8 +96,13 @@ async def _guarded(call: Callable[[], Awaitable[Any]]) -> Any:
     return result
 
 
-def _browser_options() -> BrowserOptions:
+def _browser_options(*, extract: bool = False) -> BrowserOptions:
+    # OCR reads are downscaled to VLM_MAX_IMAGE_DIMENSION anyway, so they can render at a lower
+    # device scale (EXTRACT_DEVICE_SCALE_FACTOR). Drawing tools find boxes from pixels tuned at
+    # DEVICE_SCALE_FACTOR (2.0), so they keep that.
+    scale_env = "EXTRACT_DEVICE_SCALE_FACTOR" if extract else "DEVICE_SCALE_FACTOR"
     return BrowserOptions(
+        device_scale_factor=float(os.environ.get(scale_env) or os.environ.get("DEVICE_SCALE_FACTOR", "2.0")),
         headless=True,
         timeout_ms=int(os.environ.get("BROWSER_TIMEOUT_MS", "60000")),
         settle_ms=int(os.environ.get("BROWSER_SETTLE_MS", "6000")),
@@ -120,7 +125,7 @@ async def _extract_goodnotes_async(
     provider: str | None,
 ) -> Any:
     page_selectors = parse_pages(pages)
-    browser_options = _browser_options()
+    browser_options = _browser_options(extract=True)
     output_dir = Path(os.environ.get("OUTPUT_DIR", "output"))
 
     if just_image:
