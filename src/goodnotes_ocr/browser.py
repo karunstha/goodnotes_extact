@@ -258,6 +258,8 @@ class GoodnotesBrowser:
                 storage_state=self.options.storage_state,
             )
             self._page = await self._context.new_page()
+            # Calls without their own timeout (notably page.screenshot) otherwise get Playwright's 30s.
+            self._page.set_default_timeout(self.options.timeout_ms)
             self._page.on("response", self._queue_pdf_response)
         except BaseException:
             await self.__aexit__(None, None, None)
